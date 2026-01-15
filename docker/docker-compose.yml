@@ -1,0 +1,78 @@
+version: '3.9'
+
+services:
+  ae-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: ae-nexrender-worker
+    environment:
+      # Supabase 연동
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+
+      # Nexrender 연동 (호스트의 Nexrender 서버)
+      - NEXRENDER_URL=${NEXRENDER_URL:-http://host.docker.internal:3000}
+      - NEXRENDER_SECRET=${NEXRENDER_SECRET:-}
+
+      # 경로 설정
+      - AEP_TEMPLATE_DIR=/templates
+      - OUTPUT_DIR=/output
+      - NAS_OUTPUT_PATH=${NAS_OUTPUT_PATH:-//NAS/renders}
+
+      # 렌더링 설정
+      - RENDER_TIMEOUT=${RENDER_TIMEOUT:-1800}
+      - MAX_RETRIES=${MAX_RETRIES:-3}
+
+      # 폴링 설정
+      - POLL_INTERVAL_DEFAULT=${POLL_INTERVAL_DEFAULT:-10}
+      - POLL_INTERVAL_BUSY=${POLL_INTERVAL_BUSY:-5}
+      - POLL_INTERVAL_IDLE=${POLL_INTERVAL_IDLE:-30}
+
+      # 헬스체크 포트
+      - HEALTH_PORT=8080
+
+    volumes:
+      # 출력 디렉토리 (렌더링 결과 저장)
+      - ${OUTPUT_DIR_HOST:-D:/output}:/output
+
+      # 템플릿 디렉토리 (AE 프로젝트 파일)
+      - ${TEMPLATE_DIR_HOST:-D:/templates}:/templates
+
+      # NAS 마운트 (선택)
+      # - //NAS/renders:/nas/renders
+
+    ports:
+      - "8080:8080"
+
+    restart: unless-stopped
+
+    # 리소스 제한
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 512M
+
+    # 로깅 설정
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # 헬스체크 재정의 (선택)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+# 네트워크 (선택 - 다른 서비스와 통신 필요시)
+# networks:
+#   ae-network:
+#     driver: bridge
