@@ -167,8 +167,9 @@ class TestWorkerHealthCheck:
     async def test_health_endpoint_response(self):
         """헬스 엔드포인트 응답 테스트"""
         from unittest.mock import MagicMock
-        from worker.health import HealthServer
+
         from worker.config import WorkerConfig
+        from worker.health import HealthServer
 
         # Mock Worker 생성
         mock_worker = MagicMock()
@@ -187,8 +188,9 @@ class TestWorkerHealthCheck:
     async def test_health_status_during_processing(self):
         """작업 처리 중 헬스 상태 테스트"""
         from unittest.mock import MagicMock
-        from worker.health import HealthServer
+
         from worker.config import WorkerConfig
+        from worker.health import HealthServer
 
         mock_worker = MagicMock()
         mock_worker.worker_id = "test-worker-456"

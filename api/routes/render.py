@@ -376,7 +376,7 @@ async def get_render_status(
     "/{job_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="작업 취소",
-    description="대기 중인 렌더링 작업을 취소합니다. 이미 진행 중인 작업은 취소되지 않을 수 있습니다.",
+    description="대기 중인 렌더링 작업을 취소합니다.",
     responses={
         204: {"description": "작업 취소됨"},
         404: {"model": ErrorResponse, "description": "작업을 찾을 수 없음"},
