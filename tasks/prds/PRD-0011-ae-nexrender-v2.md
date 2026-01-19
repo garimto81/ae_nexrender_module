@@ -1,9 +1,9 @@
 # PRD-0011: ae-nexrender 렌더링 워커 모듈 v2
 
-**문서 버전**: 2.1
+**문서 버전**: 2.2
 **상태**: In Progress
 **작성일**: 2026-01-15
-**최종 수정일**: 2026-01-16
+**최종 수정일**: 2026-01-19
 **담당자**: Backend Team
 
 ---
@@ -34,10 +34,24 @@ ae-nexrender는 **automation_ae 대시보드에서 분리된 독립 렌더링 �
 | **재시도 로직** | 에러 분류 기반 자동 재시도 (재시도 가능 에러만) |
 | **락 메커니즘** | 다중 워커 환경에서 작업 충돌 방지 |
 | **Crash Recovery** | 워커 크래시 시 30분 후 자동 작업 복구 |
-| **Alpha MOV 출력** | 투명 배경 MOV 렌더링 (QuickTime Animation + RGB+Alpha) |
+| **Alpha MOV 출력** | **[필수 기본값]** 투명 배경 MOV 렌더링 (QuickTime Animation + RGB+Alpha) |
 | **배경 레이어 비활성화** | mov_alpha 모드 시 자동 배경 레이어 숨김 |
 
-### 1.4 기술 스택
+### 1.4 [CRITICAL] 출력 포맷 필수 규칙
+
+| 규칙 | 내용 | 위반 시 |
+|:----:|------|--------|
+| **기본 출력** | `mov_alpha` (투명 배경) | **절대 금지** |
+| **Output Module** | `Alpha MOV` | **필수 설정** |
+| **mp4 사용** | 명시적 요청 시에만 | 사전 확인 필요 |
+
+**강제 사항**:
+1. 모든 렌더링의 기본 출력 포맷은 `mov_alpha`입니다.
+2. `mp4`, `mov` 등 다른 포맷은 사용자가 명시적으로 요청한 경우에만 사용합니다.
+3. 테스트 렌더링도 예외 없이 `mov_alpha`를 사용합니다.
+4. DB 스키마의 기본값도 `mov_alpha`입니다.
+
+### 1.5 기술 스택
 
 - **Worker**: Python 3.11+ (asyncio)
 - **Database**: Supabase (PostgreSQL + Realtime)
@@ -224,7 +238,8 @@ CREATE TABLE IF NOT EXISTS public.render_queue (
     gfx_data JSONB NOT NULL,
 
     -- 출력 설정
-    output_format TEXT DEFAULT 'mp4' CHECK (output_format IN ('mp4', 'mov', 'mov_alpha', 'png_sequence')),
+    -- [필수] 기본값: mov_alpha (투명 배경) - 모든 렌더링은 mov_alpha가 기본
+    output_format TEXT DEFAULT 'mov_alpha' CHECK (output_format IN ('mov_alpha', 'mov', 'mp4', 'png_sequence')),
     output_dir TEXT,
     output_filename TEXT,
 
@@ -386,7 +401,60 @@ END;
 $$;
 ```
 
-### 5.5 상태 전이 다이어그램
+### 5.5 지원 컴포지션 목록
+
+| 컴포지션 이름 | 슬롯 수 | 필드 | 설명 |
+|--------------|:------:|------|------|
+| `1-Hand-for-hand play is currently in progress` | 0 | event_name, message, table_id | 핸드-바이-핸드 단일 필드 |
+| `1-NEXT STREAM STARTING SOON` | 0 | event_name, tournament_name | 스트림 시작 안내 |
+| `2-Hand-for-hand play is currently in progress` | 2 | event_name, message, table_id + slots | 핸드-바이-핸드 (2인) |
+| `2-NEXT STREAM STARTING SOON` | 2 | event_name, tournament_name + slots | 스트림 시작 (2인) |
+| `4-NEXT STREAM STARTING SOON` | 4 | event_name, tournament_name + slots | 스트림 시작 (4인) |
+| **`_Feature Table Leaderboard`** | **9** | table_name, event_name + **name, chips, rank** | **피처 테이블 리더보드 (9명)** |
+
+#### _Feature Table Leaderboard 슬롯 구조
+
+```json
+{
+    "slots": [
+        {"slot_index": 1, "fields": {"name": "DANIEL NEGREANU", "chips": "1,005,113", "rank": "1"}},
+        {"slot_index": 2, "fields": {"name": "PHIL HELLMUTH", "chips": "917,676", "rank": "2"}},
+        // ... slot 3-9
+    ],
+    "single_fields": {
+        "table_name": "FEATURE TABLE",
+        "event_name": "WSOP SUPER CIRCUIT CYPRUS"
+    }
+}
+```
+
+#### 레이어 매핑 (config/mappings/CyprusDesign.yaml)
+
+> **주의**: AEP 파일의 실제 레이어 이름을 사용해야 함
+
+```yaml
+"_Feature Table Leaderboard":
+  description: "피처 테이블 리더보드 (9명 순위 표시)"
+  field_mappings:
+    # 실제 AEP 레이어명: "Name 1", "Chips 1", "Date 1" 패턴
+    slot1_name: "Name 1"
+    slot1_chips: "Chips 1"
+    slot1_rank: "Date 1"
+    # ... slot 2-9 동일 패턴
+    table_name: "leaderboard final table"
+    event_name: "WSOP SUPER CIRCUIT CYPRUS"
+```
+
+**AEP 레이어 구조**:
+| GFX 필드 | AEP 레이어명 | 설명 |
+|----------|-------------|------|
+| `slot{N}_name` | `Name {N}` | 플레이어 이름 (N=1~9) |
+| `slot{N}_chips` | `Chips {N}` | 칩 카운트 (N=1~9) |
+| `slot{N}_rank` | `Date {N}` | 순위 번호 (N=1~9) |
+| `table_name` | `leaderboard final table` | 테이블 제목 |
+| `event_name` | `WSOP SUPER CIRCUIT CYPRUS` | 이벤트명 |
+
+### 5.6 상태 전이 다이어그램
 
 ```
 ┌──────────┐     ┌──────────────┐     ┌──────────┐     ┌──────────┐
@@ -1155,7 +1223,7 @@ class WorkerConfig:
 
     # 경로 설정
     aep_template_dir: str = "D:/templates"
-    output_dir: str = "D:/output"
+    output_dir: str = "C:/claude/ae_nexrender_module/output"
     nas_output_path: str = "//NAS/renders"
 
     # 경로 매핑
@@ -1176,7 +1244,7 @@ class WorkerConfig:
             nexrender_url=os.getenv("NEXRENDER_URL", "http://localhost:3000"),
             nexrender_secret=os.getenv("NEXRENDER_SECRET", ""),
             aep_template_dir=os.getenv("AEP_TEMPLATE_DIR", "D:/templates"),
-            output_dir=os.getenv("OUTPUT_DIR", "D:/output"),
+            output_dir=os.getenv("OUTPUT_DIR", "C:/claude/ae_nexrender_module/output"),
             nas_output_path=os.getenv("NAS_OUTPUT_PATH", "//NAS/renders"),
             render_timeout=int(os.getenv("RENDER_TIMEOUT", "1800")),
             max_retries=int(os.getenv("MAX_RETRIES", "3")),
@@ -1195,7 +1263,7 @@ class WorkerConfig:
 | `NEXRENDER_URL` | Nexrender 서버 URL | `http://localhost:3000` |
 | `NEXRENDER_SECRET` | Nexrender API Secret | - |
 | `AEP_TEMPLATE_DIR` | AE 템플릿 디렉토리 | `D:/templates` |
-| `OUTPUT_DIR` | 렌더링 출력 디렉토리 | `D:/output` |
+| `OUTPUT_DIR` | 렌더링 출력 디렉토리 | `C:/claude/ae_nexrender_module/output` |
 | `NAS_OUTPUT_PATH` | NAS 출력 경로 | `//NAS/renders` |
 | `RENDER_TIMEOUT` | 렌더링 타임아웃 (초) | `1800` |
 | `MAX_RETRIES` | 최대 재시도 횟수 | `3` |
@@ -1345,7 +1413,7 @@ services:
       - OUTPUT_DIR=/output
       - NAS_OUTPUT_PATH=//NAS/renders
     volumes:
-      - D:/output:/output
+      - ./output:/output
       - D:/templates:/templates
     ports:
       - "8080:8080"
@@ -1464,3 +1532,4 @@ target-version = "py311"
 | 1.0 | 2026-01-15 | 초안 작성 (PostgreSQL + Celery) | Backend Team |
 | 2.0 | 2026-01-15 | Supabase 기반 재설계 | Claude Code |
 | 2.1 | 2026-01-16 | Alpha MOV 출력 기능 추가, 배경 레이어 비활성화 기능 | Claude Code |
+| 2.2 | 2026-01-19 | `_Feature Table Leaderboard` 컴포지션 추가 (9슬롯), 기본 출력 경로를 레포 하위 폴더로 변경 (`C:/claude/ae_nexrender_module/output`), `mov_alpha` 기본값 강제화 문서화, AEP 레이어명 매핑 수정 (`SLOT1_NAME` → `Name 1`) | Claude Code |

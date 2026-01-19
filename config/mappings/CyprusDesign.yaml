@@ -91,6 +91,70 @@ compositions:
       slot4_event_name: "SLOT4_EVENT"
       slot4_stream_time: "SLOT4_TIME"
 
+  # ============================================================================
+  # Feature Table Leaderboard 컴포지션 (9인용)
+  # 주의: AEP 파일의 실제 레이어 이름 기반 매핑
+  # - 이름: "Name 1", "Name 2", ... "Name 9"
+  # - 칩: "Chips 1", "Chips 2", ... "Chips 9"
+  # - 순위: "Date 1", "Date 2", ... "Date 9" (실제 rank로 사용)
+  # ============================================================================
+  "_Feature Table Leaderboard":
+    description: "피처 테이블 리더보드 (9명 순위 표시)"
+    field_mappings:
+      # 슬롯 1 (1위)
+      slot1_name: "Name 1"
+      slot1_chips: "Chips 1"
+      slot1_rank: "Date 1"
+      # 슬롯 2 (2위)
+      slot2_name: "Name 2"
+      slot2_chips: "Chips 2"
+      slot2_rank: "Date 2"
+      # 슬롯 3 (3위)
+      slot3_name: "Name 3"
+      slot3_chips: "Chips 3"
+      slot3_rank: "Date 3"
+      # 슬롯 4 (4위)
+      slot4_name: "Name 4"
+      slot4_chips: "Chips 4"
+      slot4_rank: "Date 4"
+      # 슬롯 5 (5위)
+      slot5_name: "Name 5"
+      slot5_chips: "Chips 5"
+      slot5_rank: "Date 5"
+      # 슬롯 6 (6위)
+      slot6_name: "Name 6"
+      slot6_chips: "Chips 6"
+      slot6_rank: "Date 6"
+      # 슬롯 7 (7위)
+      slot7_name: "Name 7"
+      slot7_chips: "Chips 7"
+      slot7_rank: "Date 7"
+      # 슬롯 8 (8위)
+      slot8_name: "Name 8"
+      slot8_chips: "Chips 8"
+      slot8_rank: "Date 8"
+      # 슬롯 9 (9위)
+      slot9_name: "Name 9"
+      slot9_chips: "Chips 9"
+      slot9_rank: "Date 9"
+      # 공통 필드
+      table_name: "leaderboard final table"
+      event_name: "WSOP SUPER CIRCUIT CYPRUS"
+
+    layer_info:
+      "Name 1":
+        type: "TextLayer"
+        gfx_field: "slot1_name"
+        description: "1위 플레이어 이름"
+      "Chips 1":
+        type: "TextLayer"
+        gfx_field: "slot1_chips"
+        description: "1위 칩 카운트"
+      "Date 1":
+        type: "TextLayer"
+        gfx_field: "slot1_rank"
+        description: "1위 순위 표시"
+
 # 글로벌 설정
 global:
   # 모든 컴포지션에 공통 적용되는 필드

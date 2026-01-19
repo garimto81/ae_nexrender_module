@@ -17,6 +17,7 @@ SAMPLE_COMPOSITIONS = [
     "2-Hand-for-hand play is currently in progress",
     "2-NEXT STREAM STARTING SOON",
     "4-NEXT STREAM STARTING SOON",
+    "_Feature Table Leaderboard",
 ]
 
 # 컴포지션별 텍스트 레이어 매핑
@@ -99,6 +100,18 @@ COMPOSITION_LAYERS = {
             {"name": "background_image", "path": "C:/images/background.png"},
         ],
     },
+    # Feature Table Leaderboard (9인용 리더보드)
+    # 실제 AEP 레이어: Name 1-9, Chips 1-9, Date 1-9 (rank용)
+    "_Feature Table Leaderboard": {
+        "single_fields": {
+            "table_name": "FEATURE TABLE",
+            "event_name": "WSOP SUPER CIRCUIT CYPRUS",
+        },
+        "slots": [
+            {"slot_index": i, "field_names": ["name", "chips", "rank"]}
+            for i in range(1, 10)  # 9 slots (AEP에 9개 레이어만 있음)
+        ],
+    },
 }
 
 # 샘플 데이터 풀
@@ -123,6 +136,25 @@ SAMPLE_MESSAGES = [
     "Final table in progress",
     "Tournament starting soon",
     "Break time - 15 minutes",
+]
+
+# Leaderboard용 플레이어 이름 목록 (임의)
+SAMPLE_PLAYER_NAMES = [
+    "DANIEL NEGREANU",
+    "PHIL HELLMUTH",
+    "VANESSA SELBST",
+    "FEDOR HOLZ",
+    "BRYN KENNEY",
+    "JUSTIN BONOMO",
+    "ERIK SEIDEL",
+    "DAN SMITH",
+    "MARIA HO",
+    "IGOR KURGANOV",
+    "JASON KOON",
+    "STEPHEN CHIDWICK",
+    "DAVID PETERS",
+    "MICHAEL ADDAMO",
+    "ALI IMSIROVIC",
 ]
 
 
@@ -197,6 +229,16 @@ def generate_sample_gfx_data(composition_name: str) -> dict[str, Any]:
                 value = random.choice(SAMPLE_TABLE_IDS)
             elif field_name == "next_stream_time":
                 value = f"Starting in {random.randint(5, 30)} minutes"
+            elif field_name == "name":
+                # Leaderboard용 플레이어 이름
+                value = SAMPLE_PLAYER_NAMES[(slot_index - 1) % len(SAMPLE_PLAYER_NAMES)]
+            elif field_name == "chips":
+                # 순위에 따른 칩 카운트 (1위가 가장 많음)
+                base_chips = 1000000 - (slot_index - 1) * 80000
+                variation = random.randint(-10000, 10000)
+                value = f"{base_chips + variation:,}"
+            elif field_name == "rank":
+                value = str(slot_index)
             else:
                 value = f"Slot {slot_index} {field_name}"
 
@@ -213,14 +255,14 @@ def generate_sample_gfx_data(composition_name: str) -> dict[str, Any]:
 
 def generate_sample_render_request(
     composition_name: str | None = None,
-    output_format: str = "mp4",
+    output_format: str = "mov_alpha",  # [필수] 기본값: mov_alpha (투명 배경)
     priority: int = 5,
 ) -> dict[str, Any]:
     """render_queue INSERT용 샘플 데이터 생성
 
     Args:
         composition_name: 컴포지션 이름 (None이면 랜덤 선택)
-        output_format: 출력 포맷 (mp4, mov, mov_alpha, png_sequence)
+        output_format: 출력 포맷 (mov_alpha 기본, mov, mp4, png_sequence)
         priority: 우선순위 (1-10)
 
     Returns:
@@ -230,7 +272,7 @@ def generate_sample_render_request(
                 "composition_name": "...",
                 "aep_project_path": "...",
                 "gfx_data": {...},
-                "output_format": "mp4",
+                "output_format": "mov_alpha",  # 투명 배경 필수
                 "priority": 5,
                 ...
             }
@@ -277,7 +319,8 @@ def generate_batch_render_requests(count: int = 5) -> list[dict[str, Any]]:
     for i in range(count):
         # 다양한 조합 생성
         comp_name = SAMPLE_COMPOSITIONS[i % len(SAMPLE_COMPOSITIONS)]
-        output_format = ["mp4", "mov"][i % 2]
+        # [필수] 기본값: mov_alpha (투명 배경) - 다른 포맷은 명시적 요청 시에만
+        output_format = "mov_alpha"
         priority = (i % 10) + 1
 
         request = generate_sample_render_request(
@@ -301,7 +344,7 @@ def generate_sample_template() -> dict[str, Any]:
         "composition": "Main",
         "output_dir": "/app/output",
         "output_filename": "test_output",
-        "output_format": "mp4",
+        "output_format": "mov_alpha",  # [필수] 기본값: mov_alpha (투명 배경)
         # 레이어는 dict 형식 (layerName: {type: ...})
         "layers": {
             "player1_name": {"type": "text"},
