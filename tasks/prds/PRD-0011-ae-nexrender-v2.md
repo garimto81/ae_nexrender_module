@@ -1525,6 +1525,165 @@ target-version = "py311"
 
 ---
 
+---
+
+## 14. 테스트 렌더링 워크플로우
+
+### 14.1 필수 사전 작업
+
+새 컴포지션 추가 또는 기존 컴포지션 수정 시 **반드시** 아래 순서를 따릅니다.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    레이어 매핑 검증 워크플로우 (필수)                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Step 1: AEP 파일 분석                                                       │
+│  ─────────────────────────────────────────────────────────────────────────── │
+│  $ cat CyprusDesign_analysis.json | jq '.compositions["컴포지션명"]'          │
+│                                                                              │
+│  확인 사항:                                                                   │
+│  - 실제 레이어 이름 (Name 1, Chips 1, Date 1 등)                             │
+│  - 레이어 타입 (TextLayer, AVLayer 등)                                       │
+│  - 레이어 개수 (슬롯 수 확인)                                                 │
+│                                                                              │
+│  Step 2: YAML 매핑 파일 작성/수정                                            │
+│  ─────────────────────────────────────────────────────────────────────────── │
+│  $ vim config/mappings/CyprusDesign.yaml                                     │
+│                                                                              │
+│  ⚠️ 주의: GFX 필드명 → AEP 실제 레이어명 매핑                                │
+│  ❌ 잘못된 예: slot1_name: "SLOT1_NAME"   (추측한 이름)                      │
+│  ✅ 올바른 예: slot1_name: "Name 1"       (AEP 분석 결과)                    │
+│                                                                              │
+│  Step 3: sample_data.py 동기화                                               │
+│  ─────────────────────────────────────────────────────────────────────────── │
+│  $ vim tests/sample_data.py                                                  │
+│                                                                              │
+│  확인 사항:                                                                   │
+│  - COMPOSITION_LAYERS 딕셔너리의 슬롯 수 일치                                │
+│  - range(1, N+1)에서 N = 실제 AEP 레이어 개수                                │
+│                                                                              │
+│  Step 4: Dry-Run 검증                                                        │
+│  ─────────────────────────────────────────────────────────────────────────── │
+│  $ python scripts/test_render.py --composition "컴포지션명" --dry-run        │
+│                                                                              │
+│  검증 항목:                                                                   │
+│  - "layerName": "Name 1" (AEP 레이어명과 일치)                               │
+│  - assets 배열의 개수 = (슬롯 수 × 필드 수) + single_fields + script         │
+│                                                                              │
+│  Step 5: 실제 렌더링 테스트                                                  │
+│  ─────────────────────────────────────────────────────────────────────────── │
+│  $ python scripts/test_render.py --composition "컴포지션명"                   │
+│                                                                              │
+│  결과 검증:                                                                   │
+│  - 출력 파일 생성 확인                                                        │
+│  - 영상에서 텍스트 변경 확인 (이전 값과 다른지)                               │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 14.2 테스트 렌더링 명령어
+
+```bash
+# 1. Dry-run (Job JSON만 확인)
+python scripts/test_render.py --composition "_Feature Table Leaderboard" --dry-run
+
+# 2. 실제 렌더링 (기본 mov_alpha)
+python scripts/test_render.py --composition "_Feature Table Leaderboard"
+
+# 3. 출력 포맷 지정
+python scripts/test_render.py --composition "_Feature Table Leaderboard" --output-format mov_alpha
+
+# 4. 출력 파일명 지정
+python scripts/test_render.py --composition "_Feature Table Leaderboard" --output-filename "my_render"
+```
+
+### 14.3 출력 파일명 형식
+
+```
+render_{YYYYMMDD_HHMMSS}_{composition_name[:20]}.mov
+
+예시:
+render_20260119_184808__Feature Table Leade.mov
+```
+
+---
+
+## 15. 트러블슈팅 가이드
+
+### 15.1 "이름이 변경되지 않음" 문제
+
+| 증상 | 원인 | 해결책 |
+|------|------|--------|
+| 텍스트가 기본값 그대로 | 레이어명 불일치 | AEP 분석 후 YAML 수정 |
+| 일부 필드만 변경됨 | 매핑 누락 | YAML에 누락된 필드 추가 |
+| 슬롯 일부만 변경됨 | 슬롯 수 불일치 | sample_data.py 슬롯 수 수정 |
+
+**진단 절차**:
+
+```bash
+# 1. Dry-run으로 Job JSON 확인
+python scripts/test_render.py --composition "컴포지션명" --dry-run
+
+# 2. layerName 확인 - AEP 레이어명과 일치해야 함
+# 잘못된 예: "layerName": "SLOT1_NAME"
+# 올바른 예: "layerName": "Name 1"
+
+# 3. AEP 분석 파일에서 실제 레이어명 확인
+cat CyprusDesign_analysis.json | jq '.compositions["_Feature Table Leaderboard MAIN"].layers[].name'
+```
+
+### 15.2 AEP 레이어명 찾는 방법
+
+**방법 1: 분석 파일 사용 (권장)**
+
+```bash
+# JSON 분석 파일에서 레이어 목록 조회
+cat CyprusDesign_analysis.json | jq '.compositions["Feature Table Leaderboard MAIN"].layers[] | {name, type}'
+```
+
+**방법 2: After Effects에서 직접 확인**
+
+1. After Effects에서 프로젝트 열기
+2. 해당 컴포지션 선택
+3. 타임라인에서 레이어 이름 확인
+4. `Name 1`, `Chips 1`, `Date 1` 등 정확한 이름 기록
+
+### 15.3 슬롯 수 불일치 문제
+
+```bash
+# sample_data.py에서 슬롯 수 확인
+grep -A5 "_Feature Table Leaderboard" tests/sample_data.py
+
+# AEP 분석에서 실제 레이어 수 확인
+cat CyprusDesign_analysis.json | jq '.compositions["Feature Table Leaderboard MAIN"].layers | length'
+```
+
+### 15.4 렌더링 실패 시 체크리스트
+
+```markdown
+□ Nexrender 서버 실행 중인가? (localhost:3030)
+□ AEP 파일 경로가 올바른가?
+□ 컴포지션 이름이 정확한가? (대소문자 구분)
+□ Output Module "Alpha MOV" 템플릿이 AE에 있는가?
+□ 출력 디렉토리에 쓰기 권한이 있는가?
+```
+
+---
+
+## 16. 파일 구조 체크리스트
+
+새 컴포지션 추가 시 수정해야 할 파일:
+
+| 파일 | 수정 내용 | 검증 방법 |
+|------|----------|----------|
+| `CyprusDesign_analysis.json` | AEP 분석 결과 (자동 생성) | AE 스크립트 실행 |
+| `config/mappings/CyprusDesign.yaml` | GFX → AEP 레이어 매핑 | dry-run으로 확인 |
+| `tests/sample_data.py` | COMPOSITION_LAYERS에 추가 | 테스트 실행 |
+| `tasks/prds/PRD-0011-ae-nexrender-v2.md` | 5.5절 컴포지션 목록 | 문서 리뷰 |
+
+---
+
 **문서 버전 관리**
 
 | 버전 | 날짜 | 변경 사항 | 작성자 |
@@ -1533,3 +1692,4 @@ target-version = "py311"
 | 2.0 | 2026-01-15 | Supabase 기반 재설계 | Claude Code |
 | 2.1 | 2026-01-16 | Alpha MOV 출력 기능 추가, 배경 레이어 비활성화 기능 | Claude Code |
 | 2.2 | 2026-01-19 | `_Feature Table Leaderboard` 컴포지션 추가 (9슬롯), 기본 출력 경로를 레포 하위 폴더로 변경 (`C:/claude/ae_nexrender_module/output`), `mov_alpha` 기본값 강제화 문서화, AEP 레이어명 매핑 수정 (`SLOT1_NAME` → `Name 1`) | Claude Code |
+| 2.3 | 2026-01-19 | 테스트 렌더링 워크플로우 및 트러블슈팅 가이드 추가, 출력 파일명에 타임스탬프 형식 추가 | Claude Code |

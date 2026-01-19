@@ -2,6 +2,41 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+---
+
+## **[CRITICAL] 출력 포맷 필수 규칙**
+
+| 규칙 | 내용 | 위반 시 |
+|:----:|------|--------|
+| **기본 출력** | `mov_alpha` (투명 배경) | **절대 금지** |
+| **Output Module** | `Alpha MOV` | **필수 설정** |
+| **mp4 사용** | 명시적 요청 시에만 | 확인 필요 |
+
+### 강제 사항
+
+1. **모든 렌더링의 기본 출력 포맷은 `mov_alpha`입니다.**
+2. **mp4, mov 등 다른 포맷은 사용자가 명시적으로 요청한 경우에만 사용합니다.**
+3. **테스트 렌더링도 예외 없이 `mov_alpha`를 사용합니다.**
+
+### 올바른 예
+
+```powershell
+# 기본 렌더링 (mov_alpha)
+python scripts/test_render.py --sample
+
+# 명시적으로 mp4 요청 시에만
+python scripts/test_render.py --sample --output-format mp4
+```
+
+### 잘못된 예
+
+```powershell
+# ❌ mp4를 기본값처럼 사용
+python scripts/test_render.py --sample --output-format mp4  # 사용자 요청 없이
+```
+
+---
+
 ## Project Overview
 
 **ae-nexrender-module**은 After Effects 렌더링 자동화를 위한 독립 워커 서비스입니다. Supabase `render_queue`를 폴링하여 Nexrender 서버에 렌더링 작업을 제출하고 진행률을 추적합니다.
@@ -193,3 +228,51 @@ API_KEYS=your-api-key
 - `sample_gfx_data_multi_slot`: 여러 슬롯 포함
 - `worker_config`: 테스트용 WorkerConfig
 - `path_converter`: 테스트용 PathConverter
+
+---
+
+## [필수] 새 컴포지션 추가 시 워크플로우
+
+**PRD 14절 참조**: `tasks/prds/PRD-0011-ae-nexrender-v2.md`
+
+```
+Step 1: AEP 분석 파일에서 실제 레이어명 확인
+───────────────────────────────────────────────
+$ cat CyprusDesign_analysis.json | jq '.compositions["컴포지션명"]'
+
+Step 2: YAML 매핑 파일 작성
+───────────────────────────────────────────────
+$ vim config/mappings/CyprusDesign.yaml
+
+⚠️ 주의: AEP 분석 결과의 실제 레이어명 사용
+❌ slot1_name: "SLOT1_NAME"   # 추측 금지
+✅ slot1_name: "Name 1"       # 분석 결과 사용
+
+Step 3: sample_data.py 슬롯 수 동기화
+───────────────────────────────────────────────
+$ vim tests/sample_data.py
+# range(1, N+1) → N = 실제 AEP 레이어 개수
+
+Step 4: Dry-Run 검증
+───────────────────────────────────────────────
+$ python scripts/test_render.py --composition "컴포지션명" --dry-run
+# "layerName": "Name 1" 확인 (AEP 레이어명과 일치)
+
+Step 5: 실제 렌더링 테스트
+───────────────────────────────────────────────
+$ python scripts/test_render.py --composition "컴포지션명"
+```
+
+### 트러블슈팅: 이름이 변경되지 않음
+
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| 텍스트 기본값 유지 | 레이어명 불일치 | AEP 분석 후 YAML 수정 |
+| 일부만 변경됨 | 매핑 누락 | YAML에 필드 추가 |
+| 슬롯 일부만 변경 | 슬롯 수 불일치 | sample_data.py 수정 |
+
+**진단**:
+```powershell
+# Job JSON에서 layerName 확인
+python scripts/test_render.py --composition "컴포지션명" --dry-run | grep layerName
+```

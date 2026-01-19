@@ -22,6 +22,7 @@ import asyncio
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 
 # 프로젝트 루트를 Python 경로에 추가
@@ -57,12 +58,14 @@ def parse_args():
     )
 
     # 출력 설정
+    # [필수] 기본값: mov_alpha (투명 배경)
+    # 모든 렌더링은 mov_alpha가 기본값입니다. 다른 포맷 사용 시 명시적으로 지정하세요.
     parser.add_argument(
         "--output-format",
         type=str,
-        default="mp4",
-        choices=["mp4", "mov", "mov_alpha", "png_sequence"],
-        help="출력 포맷 (기본: mp4)",
+        default="mov_alpha",
+        choices=["mov_alpha", "mov", "mp4", "png_sequence"],
+        help="출력 포맷 (기본: mov_alpha - 투명 배경 필수)",
     )
 
     parser.add_argument(
@@ -97,8 +100,8 @@ def parse_args():
     parser.add_argument(
         "--output-dir",
         type=str,
-        default=os.getenv("OUTPUT_DIR_HOST", "D:/output"),
-        help="출력 디렉토리 (기본: OUTPUT_DIR_HOST 환경변수)",
+        default=os.getenv("OUTPUT_DIR_HOST", "C:/claude/ae_nexrender_module/output"),
+        help="출력 디렉토리 (기본: 레포 하위 output 폴더)",
     )
 
     # 실행 모드
@@ -182,7 +185,7 @@ async def test_render(args):
         composition_name=composition_name,
         output_format=args.output_format,
         output_dir=args.output_dir,
-        output_filename=args.output_filename or f"test_render_{composition_name[:20]}",
+        output_filename=args.output_filename or f"render_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{composition_name[:20]}",
     )
 
     # 3. Nexrender Job JSON 생성

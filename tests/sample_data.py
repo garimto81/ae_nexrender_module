@@ -138,23 +138,23 @@ SAMPLE_MESSAGES = [
     "Break time - 15 minutes",
 ]
 
-# Leaderboard용 플레이어 이름 목록 (임의)
+# Leaderboard용 플레이어 이름 목록 (테스트 이름 v2)
 SAMPLE_PLAYER_NAMES = [
-    "DANIEL NEGREANU",
-    "PHIL HELLMUTH",
-    "VANESSA SELBST",
-    "FEDOR HOLZ",
-    "BRYN KENNEY",
-    "JUSTIN BONOMO",
-    "ERIK SEIDEL",
-    "DAN SMITH",
-    "MARIA HO",
-    "IGOR KURGANOV",
-    "JASON KOON",
-    "STEPHEN CHIDWICK",
-    "DAVID PETERS",
-    "MICHAEL ADDAMO",
-    "ALI IMSIROVIC",
+    "JOHN SMITH",
+    "SARAH JOHNSON",
+    "MIKE CHEN",
+    "EMMA WILLIAMS",
+    "CHRIS BROWN",
+    "LISA ANDERSON",
+    "DAVID WILSON",
+    "ANNA MARTINEZ",
+    "JAMES LEE",
+    "KATE TAYLOR",
+    "ROBERT KIM",
+    "JENNIFER DAVIS",
+    "THOMAS GARCIA",
+    "MICHELLE RODRIGUEZ",
+    "KEVIN NGUYEN",
 ]
 
 
@@ -289,13 +289,16 @@ def generate_sample_render_request(
     # AEP 프로젝트 경로 (실제 CyprusDesign.aep 경로)
     aep_project_path = "C:/claude/automation_ae/templates/CyprusDesign/CyprusDesign.aep"
 
+    # 날짜/시간 기반 파일명 생성 (YYYYMMDD_HHMMSS 형식)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
     return {
         "id": job_id,
         "composition_name": comp_name,
         "aep_project_path": aep_project_path,
         "gfx_data": gfx_data,
         "output_format": output_format,
-        "output_filename": f"test_render_{job_id[:8]}",
+        "output_filename": f"render_{timestamp}_{job_id[:8]}",
         "priority": priority,
         "status": "pending",
         "progress": 0,
