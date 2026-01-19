@@ -1,0 +1,127 @@
+# CyprusDesign.aep 레이어 매핑 설정
+#
+# GFX JSON 필드명 → AEP 실제 레이어명 매핑
+#
+# 사용법:
+# - GFX JSON의 single_fields/slots 필드명을 AEP 레이어명으로 변환
+# - AEP 레이어 이름이 변경되면 이 파일만 수정
+# - 매핑이 없는 필드는 원본 필드명으로 시도 (fallback)
+
+version: "1.0"
+
+template:
+  name: "CyprusDesign"
+  file: "CyprusDesign.aep"
+  path: "C:/claude/automation_ae/templates/CyprusDesign/CyprusDesign.aep"
+  last_updated: "2026-01-16"
+
+# 컴포지션별 필드 매핑
+compositions:
+  # ============================================================================
+  # Hand-for-hand 컴포지션 (1인용)
+  # ============================================================================
+  "1-Hand-for-hand play is currently in progress":
+    description: "핸드 포 핸드 진행 중 알림 (1인용)"
+    field_mappings:
+      # GFX 필드명: AEP 레이어명
+      event_name: "EVENT #12: $5,000 MEGA MYSTERY BOUNTY RAFFLE"
+      tournament_name: "NEXT STREAM STARTING SOON"
+      # message: null  # 해당 레이어 없음
+      # table_id: null  # 해당 레이어 없음
+
+    # 레이어 메타데이터 (검증/문서화 용도)
+    layer_info:
+      "EVENT #12: $5,000 MEGA MYSTERY BOUNTY RAFFLE":
+        type: "TextLayer"
+        default_enabled: true
+        gfx_field: "event_name"
+        description: "이벤트 제목 표시"
+      "NEXT STREAM STARTING SOON":
+        type: "TextLayer"
+        default_enabled: false
+        gfx_field: "tournament_name"
+        description: "다음 스트림 안내 (기본 비활성화)"
+
+  # ============================================================================
+  # NEXT STREAM STARTING SOON 컴포지션 (1인용)
+  # ============================================================================
+  "1-NEXT STREAM STARTING SOON":
+    description: "다음 스트림 시작 안내 (1인용)"
+    field_mappings:
+      event_name: "EVENT NAME LAYER"
+      stream_time: "TIME LAYER"
+      message: "MESSAGE LAYER"
+
+  # ============================================================================
+  # Hand-for-hand 컴포지션 (2인용)
+  # ============================================================================
+  "2-Hand-for-hand play is currently in progress":
+    description: "핸드 포 핸드 진행 중 알림 (2인용)"
+    field_mappings:
+      # 슬롯 1
+      slot1_event_name: "SLOT1_EVENT_NAME"
+      slot1_table_id: "SLOT1_TABLE_ID"
+      # 슬롯 2
+      slot2_event_name: "SLOT2_EVENT_NAME"
+      slot2_table_id: "SLOT2_TABLE_ID"
+
+  # ============================================================================
+  # NEXT STREAM STARTING SOON 컴포지션 (2인용)
+  # ============================================================================
+  "2-NEXT STREAM STARTING SOON":
+    description: "다음 스트림 시작 안내 (2인용)"
+    field_mappings:
+      slot1_event_name: "SLOT1_EVENT"
+      slot1_stream_time: "SLOT1_TIME"
+      slot2_event_name: "SLOT2_EVENT"
+      slot2_stream_time: "SLOT2_TIME"
+
+  # ============================================================================
+  # NEXT STREAM STARTING SOON 컴포지션 (4인용)
+  # ============================================================================
+  "4-NEXT STREAM STARTING SOON":
+    description: "다음 스트림 시작 안내 (4인용)"
+    field_mappings:
+      slot1_event_name: "SLOT1_EVENT"
+      slot1_stream_time: "SLOT1_TIME"
+      slot2_event_name: "SLOT2_EVENT"
+      slot2_stream_time: "SLOT2_TIME"
+      slot3_event_name: "SLOT3_EVENT"
+      slot3_stream_time: "SLOT3_TIME"
+      slot4_event_name: "SLOT4_EVENT"
+      slot4_stream_time: "SLOT4_TIME"
+
+# 글로벌 설정
+global:
+  # 모든 컴포지션에 공통 적용되는 필드
+  common_fields:
+    wsop_super_circuit_cyprus: "WSOP SUPER CIRCUIT CYPRUS"
+    location: "MERIT ROYAL DIAMOND HOTEL"
+
+  # 기본 변환 규칙
+  transformations:
+    text_case: "upper"  # 모든 텍스트 대문자 변환
+
+  # 비활성화할 배경 레이어 패턴 (mov_alpha 모드)
+  background_layer_patterns:
+    - "background"
+    - "Background"
+    - "BG"
+    - "bg"
+    - "배경"
+    - "solid"
+    - "Solid"
+
+# 매핑 업데이트 가이드
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. AEP 파일에서 레이어 이름 변경 시:
+#    - 해당 컴포지션의 field_mappings에서 새 레이어 이름으로 수정
+#
+# 2. 새 컴포지션 추가 시:
+#    - compositions 섹션에 새 항목 추가
+#    - field_mappings에 GFX 필드 → AEP 레이어 매핑 정의
+#
+# 3. 매핑 검증:
+#    - python scripts/test_render.py --dry-run으로 Job JSON 확인
+#    - layerName이 실제 AEP 레이어명과 일치하는지 확인
+# ─────────────────────────────────────────────────────────────────────────────

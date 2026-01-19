@@ -48,9 +48,7 @@ NON_RETRYABLE_PATTERNS = [
 class NexrenderError(Exception):
     """Nexrender 기본 에러"""
 
-    def __init__(
-        self, message: str, category: ErrorCategory = ErrorCategory.UNKNOWN
-    ):
+    def __init__(self, message: str, category: ErrorCategory = ErrorCategory.UNKNOWN):
         super().__init__(message)
         self.category = category
 
@@ -89,9 +87,7 @@ class ErrorClassifier:
         return ErrorCategory.UNKNOWN
 
     @classmethod
-    def format_message(
-        cls, error: Exception, include_traceback: bool = False
-    ) -> str:
+    def format_message(cls, error: Exception, include_traceback: bool = False) -> str:
         """에러 메시지 포맷팅
 
         Args:

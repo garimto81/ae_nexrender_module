@@ -2,19 +2,19 @@
 Pytest 설정 및 공통 Fixture
 """
 
-import os
 from typing import Any
 
 import pytest
 
-from worker.config import WorkerConfig
 from lib.path_utils import PathConverter, PathMapping
+from worker.config import WorkerConfig
 
 
 @pytest.fixture
 def sample_gfx_data() -> dict[str, Any]:
     """샘플 GFX 데이터 (기본)"""
     from tests.sample_data import generate_sample_gfx_data
+
     return generate_sample_gfx_data("basic")
 
 
@@ -22,6 +22,7 @@ def sample_gfx_data() -> dict[str, Any]:
 def sample_gfx_data_multi_slot() -> dict[str, Any]:
     """샘플 GFX 데이터 (여러 슬롯)"""
     from tests.sample_data import generate_sample_gfx_data
+
     return generate_sample_gfx_data("multi_slot")
 
 
@@ -29,6 +30,7 @@ def sample_gfx_data_multi_slot() -> dict[str, Any]:
 def sample_gfx_data_with_images() -> dict[str, Any]:
     """샘플 GFX 데이터 (이미지 포함)"""
     from tests.sample_data import generate_sample_gfx_data
+
     return generate_sample_gfx_data("with_images")
 
 
@@ -36,6 +38,7 @@ def sample_gfx_data_with_images() -> dict[str, Any]:
 def sample_template() -> dict[str, Any]:
     """샘플 템플릿 데이터 (레거시)"""
     from tests.sample_data import generate_sample_template
+
     return generate_sample_template()
 
 
@@ -43,6 +46,7 @@ def sample_template() -> dict[str, Any]:
 def sample_layer_data() -> dict[str, Any]:
     """샘플 레이어 데이터 (레거시)"""
     from tests.sample_data import generate_sample_layer_data
+
     return generate_sample_layer_data()
 
 

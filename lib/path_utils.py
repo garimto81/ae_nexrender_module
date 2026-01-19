@@ -16,6 +16,7 @@ from typing import NamedTuple
 
 class PathMapping(NamedTuple):
     """경로 매핑 규칙"""
+
     docker_path: str
     windows_path: str
 
@@ -52,11 +53,7 @@ class PathConverter:
         """
         for mapping in self.mappings:
             if docker_path.startswith(mapping.docker_path):
-                return docker_path.replace(
-                    mapping.docker_path,
-                    mapping.windows_path,
-                    1
-                )
+                return docker_path.replace(mapping.docker_path, mapping.windows_path, 1)
         return docker_path
 
     def to_docker_path(self, windows_path: str) -> str:
@@ -78,11 +75,7 @@ class PathConverter:
 
         for mapping in self.mappings:
             if normalized.startswith(mapping.windows_path):
-                return normalized.replace(
-                    mapping.windows_path,
-                    mapping.docker_path,
-                    1
-                )
+                return normalized.replace(mapping.windows_path, mapping.docker_path, 1)
         return windows_path
 
     def to_file_url(self, path: str) -> str:

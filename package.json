@@ -1,0 +1,32 @@
+{
+  "name": "ae-nexrender-module",
+  "version": "1.0.0",
+  "description": "AE-Nexrender 렌더링 워커 모듈",
+  "overrides": {
+    "tar": "^7.5.3"
+  },
+  "scripts": {
+    "server": "nexrender-server --port 3030",
+    "worker": "nexrender-worker --host http://localhost:3030",
+    "start": "concurrently --kill-others \"npm run server\" \"npm run worker\"",
+    "test:render": "python scripts/test_render.py --sample --dry-run"
+  },
+  "dependencies": {
+    "@nexrender/cli": "^1.62.3",
+    "@nexrender/server": "^1.62.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "nexrender",
+    "after-effects",
+    "rendering",
+    "automation"
+  ],
+  "author": "AE Automation Team",
+  "license": "MIT"
+}

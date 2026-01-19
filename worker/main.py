@@ -72,13 +72,18 @@ class Worker:
         # Windows는 asyncio signal handler를 지원하지 않으므로
         # signal.signal() 사용
         import sys
+
         if sys.platform != "win32":
             loop = asyncio.get_event_loop()
             for sig in (signal.SIGINT, signal.SIGTERM):
-                loop.add_signal_handler(sig, lambda: asyncio.create_task(self.shutdown()))
+                loop.add_signal_handler(
+                    sig, lambda: asyncio.create_task(self.shutdown())
+                )
         else:
             # Windows: signal.signal() 사용 (SIGTERM은 Windows에서 지원 안 함)
-            signal.signal(signal.SIGINT, lambda s, f: asyncio.create_task(self.shutdown()))
+            signal.signal(
+                signal.SIGINT, lambda s, f: asyncio.create_task(self.shutdown())
+            )
 
         # 헬스 서버 시작
         await self.health_server.start()
@@ -120,7 +125,9 @@ class Worker:
                     try:
                         await self.processor.process(job)
                     except Exception as e:
-                        logger.error(f"[Worker] 작업 처리 중 에러: Job {job_id}, Error: {e}")
+                        logger.error(
+                            f"[Worker] 작업 처리 중 에러: Job {job_id}, Error: {e}"
+                        )
                     finally:
                         self.current_job_id = None
 

@@ -90,10 +90,7 @@ COMPOSITION_LAYERS = {
             for i in range(1, 9)  # 8 slots
         ],
         # 테스트용 고정값
-        "_fixed_values": {
-            f"slot{i}_name": f"Player {i}"
-            for i in range(1, 9)
-        },
+        "_fixed_values": {f"slot{i}_name": f"Player {i}" for i in range(1, 9)},
     },
     "with_images": {
         "single_fields": {},
@@ -169,7 +166,9 @@ def generate_sample_gfx_data(composition_name: str) -> dict[str, Any]:
         elif field_name == "tournament_name":
             value = random.choice(SAMPLE_TOURNAMENT_NAMES)
         elif field_name == "table_id":
-            value = template["single_fields"].get("table_id", random.choice(SAMPLE_TABLE_IDS))
+            value = template["single_fields"].get(
+                "table_id", random.choice(SAMPLE_TABLE_IDS)
+            )
         elif field_name == "tournament":
             value = template["single_fields"].get("tournament", "WSOP 2024")
         elif field_name == "message":

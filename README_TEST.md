@@ -99,6 +99,50 @@ python scripts/test_render.py --sample \
 | `--dry-run` | Job JSON만 생성 (렌더링 안함) |
 | `--no-poll` | 진행률 폴링 건너뜀 |
 | `--output-format` | 출력 포맷 (mp4, mov, mov_alpha, png_sequence) |
+| `--field` | 필드 값 오버라이드 (예: `--field event_name="MY EVENT"`) |
+
+### 출력 포맷 상세
+
+| 포맷 | 확장자 | 설명 | Output Module |
+|------|--------|------|---------------|
+| `mp4` | .mp4 | H.264 압축 (기본값) | AE 기본 설정 |
+| `mov` | .mov | QuickTime 무손실 | AE 기본 설정 |
+| `mov_alpha` | .mov | **알파 채널 포함** (투명 배경) | Apple ProRes 4444 |
+| `png_sequence` | .png | PNG 시퀀스 | AE 기본 설정 |
+
+### 알파 채널 출력 (mov_alpha)
+
+투명 배경이 필요한 그래픽 오버레이 렌더링 시 사용합니다.
+
+```bash
+# 알파 채널 mov 렌더링
+python scripts/test_render.py --sample \
+  --output-format mov_alpha \
+  --field event_name="WSOP 2026" \
+  --field message="Tournament Starting"
+
+# 생성되는 Job JSON의 template 섹션:
+# {
+#   "src": "file:///...",
+#   "composition": "...",
+#   "outputModule": "Apple ProRes 4444",  <-- 핵심 설정
+#   "outputExt": "mov"
+# }
+```
+
+**주의사항**:
+- **AE 프로젝트에서 렌더 설정이 알파 채널을 지원하는 코덱으로 설정되어 있어야 합니다**
+- 현재 CyprusDesign.aep는 H.264 (mp4)로 설정되어 있어 mov_alpha 사용 시 AE 프로젝트 수정 필요
+- 파일 크기가 mp4보다 훨씬 큽니다 (무손실 + 알파 채널)
+- 방송 송출용 오버레이에 적합합니다
+
+**AE 프로젝트 알파 출력 설정 방법**:
+1. After Effects에서 프로젝트 열기
+2. Composition > Add to Render Queue
+3. Output Module 클릭 > Format: QuickTime
+4. Format Options > Video Codec: Animation 또는 ProRes 4444
+5. Channels: RGB + Alpha
+6. 템플릿으로 저장 후 프로젝트 저장
 
 ## 3. Supabase 시딩 (scripts/seed_render_queue.py)
 

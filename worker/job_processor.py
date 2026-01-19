@@ -13,8 +13,8 @@
 
 import asyncio
 import logging
+import shutil
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -145,7 +145,9 @@ class JobProcessor:
                 render_duration_ms=render_duration_ms,
             )
 
-            logger.info(f"[Processor] 작업 완료: Job {job_id}, output={final_output_path}")
+            logger.info(
+                f"[Processor] 작업 완료: Job {job_id}, output={final_output_path}"
+            )
 
             return {
                 "status": "success",
@@ -197,7 +199,10 @@ class JobProcessor:
                     "queued": (RenderStatus.RENDERING.value, 25),
                     "started": (RenderStatus.RENDERING.value, 30),
                     "downloading": (RenderStatus.RENDERING.value, 35),
-                    "rendering": (RenderStatus.RENDERING.value, 40 + int(render_progress * 0.4)),
+                    "rendering": (
+                        RenderStatus.RENDERING.value,
+                        40 + int(render_progress * 0.4),
+                    ),
                     "encoding": (RenderStatus.ENCODING.value, 85),
                     "finished": (RenderStatus.UPLOADING.value, 95),
                 }
@@ -222,8 +227,13 @@ class JobProcessor:
                     return
 
             except Exception as e:
+                # NexrenderError는 렌더링 실패이므로 다시 raise
+                from lib.errors import NexrenderError
+
+                if isinstance(e, NexrenderError):
+                    raise
                 logger.warning(f"[Processor] 상태 조회 실패: Job {job_id}, Error: {e}")
-                # 상태 조회 실패는 무시하고 계속 폴링
+                # 네트워크 등 일시적 오류는 무시하고 계속 폴링
 
             await asyncio.sleep(poll_interval)
             elapsed += poll_interval
@@ -238,11 +248,13 @@ class JobProcessor:
             nexrender_job_uid: Nexrender Job UID
 
         Returns:
-            str: 출력 파일 경로
+            str: 최종 출력 파일 경로 (NAS 복사 시 NAS 경로)
 
         Raises:
-            FileNotFoundError: 출력 파일 없음
+            FileNotFoundError: 출력 파일 없음 또는 크기가 0
         """
+        job_id = job["id"]
+
         # 기존 스키마: output_path 사용
         output_path = job.get("output_path")
 
@@ -255,24 +267,183 @@ class JobProcessor:
                 "png_sequence": "png",
             }
             output_ext = output_ext_map.get(job.get("output_format", "mp4"), "mp4")
-            output_path = f"{self.config.output_dir}/{job['id']}.{output_ext}"
+            output_path = f"{self.config.output_dir}/{job_id}.{output_ext}"
 
         # Windows 경로로 변환 (Docker 환경)
         output_path = self.path_converter.to_windows_path(output_path)
-
-        # 파일 존재 확인
         output_file = Path(output_path)
-        if not output_file.exists():
-            logger.warning(f"[Processor] 출력 파일 없음: {output_path}")
-            # Nexrender action-copy 실패 가능성 있음
-            # 임시로 경로만 반환 (실제 파일은 Nexrender가 생성)
 
-        # TODO: NAS 복사 (필요 시)
-        # if self.config.nas_output_path:
-        #     nas_path = f"{self.config.nas_output_path}/{output_filename}.{output_ext}"
-        #     shutil.copy(output_path, nas_path)
+        # 1. 파일 검증: 존재 여부
+        await self._verify_output_file(output_file, job_id)
 
-        return output_path
+        # 2. 파일 검증: 크기 확인
+        file_size = await self._verify_file_size(output_file, job_id)
+
+        # 3. 파일 검증: 포맷 확인 (확장자 기반)
+        await self._verify_file_format(output_file, job.get("output_format", "mp4"))
+
+        logger.info(
+            f"[Processor] 파일 검증 완료: Job {job_id}, "
+            f"path={output_path}, size={file_size:,} bytes"
+        )
+
+        # 4. NAS 복사 (설정된 경우)
+        final_path = output_path
+        if self.config.nas_output_path:
+            nas_path = await self._copy_to_nas(output_file, job_id)
+            if nas_path:
+                final_path = nas_path
+                logger.info(f"[Processor] NAS 복사 완료: Job {job_id}, nas={nas_path}")
+
+        return final_path
+
+    async def _verify_output_file(
+        self, output_file: Path, job_id: str, max_retries: int = 3
+    ) -> None:
+        """출력 파일 존재 확인 (재시도 포함)
+
+        Nexrender action-copy 완료 후에도 파일 시스템 동기화 지연이 있을 수 있어
+        최대 max_retries회 재시도합니다.
+
+        Args:
+            output_file: 출력 파일 경로
+            job_id: 작업 ID
+            max_retries: 최대 재시도 횟수
+
+        Raises:
+            FileNotFoundError: 파일이 존재하지 않음
+        """
+        for attempt in range(max_retries):
+            if output_file.exists():
+                return
+
+            if attempt < max_retries - 1:
+                wait_time = (attempt + 1) * 2  # 2초, 4초, 6초
+                logger.warning(
+                    f"[Processor] 출력 파일 대기 중: Job {job_id}, "
+                    f"attempt {attempt + 1}/{max_retries}, wait {wait_time}초"
+                )
+                await asyncio.sleep(wait_time)
+
+        raise FileNotFoundError(f"출력 파일 없음: Job {job_id}, path={output_file}")
+
+    async def _verify_file_size(
+        self, output_file: Path, job_id: str, min_size: int = 1024
+    ) -> int:
+        """출력 파일 크기 검증
+
+        Args:
+            output_file: 출력 파일 경로
+            job_id: 작업 ID
+            min_size: 최소 파일 크기 (bytes), 기본 1KB
+
+        Returns:
+            int: 파일 크기 (bytes)
+
+        Raises:
+            ValueError: 파일 크기가 너무 작음 (렌더링 실패 의심)
+        """
+        file_size = output_file.stat().st_size
+
+        if file_size < min_size:
+            raise ValueError(
+                f"출력 파일 크기 이상: Job {job_id}, "
+                f"size={file_size} bytes (최소 {min_size} bytes 필요)"
+            )
+
+        return file_size
+
+    async def _verify_file_format(
+        self, output_file: Path, expected_format: str
+    ) -> None:
+        """출력 파일 포맷 검증 (확장자 기반)
+
+        Args:
+            output_file: 출력 파일 경로
+            expected_format: 예상 출력 포맷 (mp4, mov, mov_alpha 등)
+
+        Raises:
+            ValueError: 확장자 불일치
+        """
+        expected_ext_map = {
+            "mp4": ".mp4",
+            "mov": ".mov",
+            "mov_alpha": ".mov",
+            "png_sequence": ".png",
+        }
+        expected_ext = expected_ext_map.get(expected_format.lower(), ".mp4")
+        actual_ext = output_file.suffix.lower()
+
+        if actual_ext != expected_ext:
+            raise ValueError(
+                f"출력 파일 포맷 불일치: 예상={expected_ext}, 실제={actual_ext}"
+            )
+
+    async def _copy_to_nas(
+        self, source_file: Path, job_id: str, max_retries: int = 2
+    ) -> str | None:
+        """NAS로 파일 복사
+
+        NAS 경로가 설정되어 있고 접근 가능한 경우에만 복사합니다.
+        복사 실패 시 로컬 파일은 유지되며 경고만 발생합니다.
+
+        Args:
+            source_file: 소스 파일 경로
+            job_id: 작업 ID
+            max_retries: 최대 재시도 횟수
+
+        Returns:
+            str | None: NAS 파일 경로 (성공 시) 또는 None (실패/비활성화 시)
+        """
+        nas_base = self.config.nas_output_path
+        if not nas_base:
+            return None
+
+        # NAS 경로 구성: //NAS/renders/{job_id}.{ext}
+        nas_path = Path(nas_base) / source_file.name
+        nas_path_str = str(nas_path)
+
+        for attempt in range(max_retries):
+            try:
+                # NAS 디렉토리 접근 가능 여부 확인
+                nas_dir = Path(nas_base)
+                if not nas_dir.exists():
+                    logger.warning(f"[Processor] NAS 디렉토리 접근 불가: {nas_base}")
+                    return None
+
+                # 비동기 복사 (blocking I/O를 executor에서 실행)
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(
+                    None, shutil.copy2, str(source_file), nas_path_str
+                )
+
+                # 복사 검증
+                if nas_path.exists() and nas_path.stat().st_size > 0:
+                    logger.info(
+                        f"[Processor] NAS 복사 성공: Job {job_id}, "
+                        f"nas={nas_path_str}"
+                    )
+                    return nas_path_str
+
+            except PermissionError as e:
+                logger.warning(
+                    f"[Processor] NAS 복사 권한 오류: Job {job_id}, "
+                    f"attempt {attempt + 1}/{max_retries}, error={e}"
+                )
+            except OSError as e:
+                logger.warning(
+                    f"[Processor] NAS 복사 실패: Job {job_id}, "
+                    f"attempt {attempt + 1}/{max_retries}, error={e}"
+                )
+
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2)
+
+        logger.error(
+            f"[Processor] NAS 복사 최종 실패: Job {job_id}, "
+            f"로컬 파일 유지: {source_file}"
+        )
+        return None
 
     async def _handle_error(self, job_id: str, error: Exception) -> None:
         """에러 처리
@@ -300,9 +471,7 @@ class JobProcessor:
         retry_count = error_details.get("retry_count", 0)
         max_retries = error_details.get("max_retries", self.config.max_retries)
 
-        should_retry = (
-            category == ErrorCategory.RETRYABLE and retry_count < max_retries
-        )
+        should_retry = category == ErrorCategory.RETRYABLE and retry_count < max_retries
 
         if should_retry:
             logger.info(

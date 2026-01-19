@@ -4,7 +4,6 @@
 워커 상태 모니터링을 위한 간단한 HTTP 서버.
 """
 
-import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING

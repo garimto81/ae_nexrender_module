@@ -7,11 +7,11 @@
 import pytest
 
 from lib.errors import (
+    NON_RETRYABLE_PATTERNS,
+    RETRYABLE_PATTERNS,
     ErrorCategory,
     ErrorClassifier,
     NexrenderError,
-    RETRYABLE_PATTERNS,
-    NON_RETRYABLE_PATTERNS,
 )
 
 

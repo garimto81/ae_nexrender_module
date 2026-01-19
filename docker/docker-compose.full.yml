@@ -1,0 +1,160 @@
+version: '3.9'
+
+# 전체 스택 Docker Compose
+# Nexrender 서버, 워커, ae-worker를 모두 포함
+#
+# 사용법:
+#   docker-compose -f docker/docker-compose.full.yml up -d
+#
+# 주의: Nexrender 워커는 After Effects가 필요하므로
+#       호스트 머신에서 직접 실행하는 것을 권장합니다.
+#       Docker에서는 서버만 실행하고, 워커는 호스트에서 실행하세요.
+
+services:
+  # Nexrender API 서버
+  nexrender-server:
+    image: node:18-alpine
+    container_name: nexrender-server
+    working_dir: /app
+    command: >
+      sh -c "npm install -g @nexrender/server &&
+             nexrender-server --port 3000"
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/v1/jobs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # AE-Nexrender 렌더링 API 서버
+  render-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: ae-nexrender-api
+    environment:
+      # 환경
+      - ENV=${ENV:-prod}
+
+      # Supabase 연동
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+
+      # Nexrender 연동
+      - NEXRENDER_URL=http://nexrender-server:3000
+      - NEXRENDER_SECRET=${NEXRENDER_SECRET:-}
+
+      # API 설정
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - API_KEYS=${API_KEYS}
+      - CONFIG_PATH=/app/config/api_config.yaml
+
+    volumes:
+      # 설정 파일 (핫 리로드용)
+      - ../config:/app/config:ro
+
+    ports:
+      - "8000:8000"
+
+    restart: unless-stopped
+
+    depends_on:
+      nexrender-server:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # AE-Nexrender 폴링 워커 (Supabase 연동)
+  ae-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: ae-nexrender-worker
+    depends_on:
+      nexrender-server:
+        condition: service_healthy
+    environment:
+      # Supabase 연동
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+
+      # Nexrender 연동 (Docker 내부 네트워크)
+      - NEXRENDER_URL=http://nexrender-server:3000
+      - NEXRENDER_SECRET=${NEXRENDER_SECRET:-}
+
+      # 경로 설정
+      - AEP_TEMPLATE_DIR=/templates
+      - OUTPUT_DIR=/output
+      - NAS_OUTPUT_PATH=${NAS_OUTPUT_PATH:-//NAS/renders}
+
+      # 렌더링 설정
+      - RENDER_TIMEOUT=${RENDER_TIMEOUT:-1800}
+      - MAX_RETRIES=${MAX_RETRIES:-3}
+
+      # 폴링 설정
+      - POLL_INTERVAL_DEFAULT=${POLL_INTERVAL_DEFAULT:-10}
+      - POLL_INTERVAL_BUSY=${POLL_INTERVAL_BUSY:-5}
+      - POLL_INTERVAL_IDLE=${POLL_INTERVAL_IDLE:-30}
+
+      # 헬스체크 포트
+      - HEALTH_PORT=8080
+
+    volumes:
+      # 출력 디렉토리 (렌더링 결과 저장)
+      - ${OUTPUT_DIR_HOST:-D:/output}:/output
+
+      # 템플릿 디렉토리 (AE 프로젝트 파일)
+      - ${TEMPLATE_DIR_HOST:-D:/templates}:/templates
+
+    ports:
+      - "8080:8080"
+
+    restart: unless-stopped
+
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 512M
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+# 네트워크 설정
+networks:
+  default:
+    name: ae-nexrender-network
+    driver: bridge

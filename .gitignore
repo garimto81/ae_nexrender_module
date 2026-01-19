@@ -56,3 +56,5 @@ logs/
 
 # Supabase temp
 supabase/.temp/
+node_modules
+node_modules

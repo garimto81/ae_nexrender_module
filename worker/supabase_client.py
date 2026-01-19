@@ -9,9 +9,9 @@ import socket
 from datetime import datetime, timezone
 from typing import Any
 
+from lib.types import RenderStatus
 from supabase import Client, create_client
 
-from lib.types import RenderStatus
 from .config import WorkerConfig
 
 
@@ -57,12 +57,14 @@ class SupabaseQueueClient:
         # 2. 작업 상태를 preparing으로 업데이트 (atomic하지 않지만 실용적)
         update_response = (
             self.client.table("render_queue")
-            .update({
-                "status": RenderStatus.PREPARING.value,
-                "worker_id": worker_id,
-                "worker_host": self.worker_host,
-                "started_at": datetime.now(timezone.utc).isoformat(),
-            })
+            .update(
+                {
+                    "status": RenderStatus.PREPARING.value,
+                    "worker_id": worker_id,
+                    "worker_host": self.worker_host,
+                    "started_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
             .eq("id", job_id)
             .eq("status", RenderStatus.PENDING.value)  # 동시성 보호
             .execute()
@@ -104,12 +106,25 @@ class SupabaseQueueClient:
 
         # 허용 컬럼만 필터링
         allowed_columns = {
-            "progress", "current_frame", "total_frames",
-            "error_message", "error_details", "error_frame",
-            "output_path", "output_file_size", "output_duration_seconds",
-            "render_duration_ms", "completed_at", "started_at",
-            "metadata", "worker_id", "worker_host", "aerender_pid",
-            "cache_hit", "cached_output_path", "estimated_completion",
+            "progress",
+            "current_frame",
+            "total_frames",
+            "error_message",
+            "error_details",
+            "error_frame",
+            "output_path",
+            "output_file_size",
+            "output_duration_seconds",
+            "render_duration_ms",
+            "completed_at",
+            "started_at",
+            "metadata",
+            "worker_id",
+            "worker_host",
+            "aerender_pid",
+            "cache_hit",
+            "cached_output_path",
+            "estimated_completion",
         }
 
         for key, value in kwargs.items():
@@ -172,9 +187,9 @@ class SupabaseQueueClient:
         if job:
             metadata = job.get("metadata", {}) or {}
             metadata["nexrender_job_id"] = nexrender_job_id
-            self.client.table("render_queue").update(
-                {"metadata": metadata}
-            ).eq("id", job_id).execute()
+            self.client.table("render_queue").update({"metadata": metadata}).eq(
+                "id", job_id
+            ).execute()
 
     async def mark_completed(
         self,
@@ -206,7 +221,9 @@ class SupabaseQueueClient:
         if render_duration_ms is not None:
             update_data["render_duration_ms"] = render_duration_ms
 
-        return await self.update_job_status(job_id, RenderStatus.COMPLETED.value, **update_data)
+        return await self.update_job_status(
+            job_id, RenderStatus.COMPLETED.value, **update_data
+        )
 
     async def mark_failed(
         self,
@@ -279,11 +296,13 @@ class SupabaseQueueClient:
         error_details["last_recovery_at"] = datetime.now(timezone.utc).isoformat()
 
         # pending으로 복원
-        self.client.table("render_queue").update({
-            "status": RenderStatus.PENDING.value,
-            "worker_id": None,
-            "error_details": error_details,
-        }).eq("id", job_id).execute()
+        self.client.table("render_queue").update(
+            {
+                "status": RenderStatus.PENDING.value,
+                "worker_id": None,
+                "error_details": error_details,
+            }
+        ).eq("id", job_id).execute()
 
     async def get_job(self, job_id: str) -> dict[str, Any] | None:
         """

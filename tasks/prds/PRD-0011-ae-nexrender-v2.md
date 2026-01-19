@@ -1,9 +1,9 @@
 # PRD-0011: ae-nexrender 렌더링 워커 모듈 v2
 
-**문서 버전**: 2.0
-**상태**: Draft
+**문서 버전**: 2.1
+**상태**: In Progress
 **작성일**: 2026-01-15
-**최종 수정일**: 2026-01-15
+**최종 수정일**: 2026-01-16
 **담당자**: Backend Team
 
 ---
@@ -34,6 +34,8 @@ ae-nexrender는 **automation_ae 대시보드에서 분리된 독립 렌더링 �
 | **재시도 로직** | 에러 분류 기반 자동 재시도 (재시도 가능 에러만) |
 | **락 메커니즘** | 다중 워커 환경에서 작업 충돌 방지 |
 | **Crash Recovery** | 워커 크래시 시 30분 후 자동 작업 복구 |
+| **Alpha MOV 출력** | 투명 배경 MOV 렌더링 (QuickTime Animation + RGB+Alpha) |
+| **배경 레이어 비활성화** | mov_alpha 모드 시 자동 배경 레이어 숨김 |
 
 ### 1.4 기술 스택
 
@@ -222,7 +224,7 @@ CREATE TABLE IF NOT EXISTS public.render_queue (
     gfx_data JSONB NOT NULL,
 
     -- 출력 설정
-    output_format TEXT DEFAULT 'mp4' CHECK (output_format IN ('mp4', 'mov', 'png_sequence')),
+    output_format TEXT DEFAULT 'mp4' CHECK (output_format IN ('mp4', 'mov', 'mov_alpha', 'png_sequence')),
     output_dir TEXT,
     output_filename TEXT,
 
@@ -601,6 +603,69 @@ class NexrenderJobBuilder:
             "png_sequence": "png",
         }
         return format_map.get(self.config.output_format, "mp4")
+
+    def _get_output_module(self) -> str | None:
+        """출력 포맷에 따른 After Effects Output Module 반환
+
+        mov_alpha: 알파 채널 출력 (투명 배경)
+        - 사용자 정의 "Alpha MOV" Output Module 템플릿 필요
+        - 설정: QuickTime > Animation 코덱 > RGB+Alpha
+
+        Returns:
+            Output Module 이름 또는 None
+        """
+        if self.config.output_format.lower() == "mov_alpha":
+            custom_module = os.getenv("NEXRENDER_OUTPUT_MODULE_ALPHA")
+            return custom_module or "Alpha MOV"
+        return None
+
+    def _get_disable_layers_script(self, layer_patterns: list[str]) -> dict[str, Any] | None:
+        """배경 레이어 비활성화 JSX 스크립트 생성
+
+        mov_alpha 모드에서 투명 배경을 위해 배경 레이어를 비활성화합니다.
+
+        Args:
+            layer_patterns: 비활성화할 레이어 이름 패턴 목록
+                기본값: ["background", "Background", "BG", "bg", "배경", "solid", "Solid"]
+
+        Returns:
+            Nexrender script asset (Base64 인코딩된 JSX)
+        """
+        ...
+```
+
+### 6.2.1 Alpha MOV 출력 설정
+
+**목적**: 투명 배경이 필요한 자막/오버레이 렌더링
+
+**설정 방법**:
+
+1. **After Effects Output Module 템플릿 생성** (최초 1회):
+   - AE 렌더 큐 > Output Module Settings
+   - Format: QuickTime
+   - Video Codec: Animation
+   - Channels: RGB+Alpha
+   - 템플릿 저장: "Alpha MOV"
+
+2. **렌더링 요청 시**:
+   ```json
+   {
+     "output_format": "mov_alpha",
+     "gfx_data": {
+       "disable_layers": ["background", "BG", "solid"]  // 선택적 커스텀
+     }
+   }
+   ```
+
+3. **자동 처리**:
+   - `outputModule: "Alpha MOV"` 설정
+   - 배경 레이어 비활성화 JSX 스크립트 주입
+   - 출력: `pix_fmt=argb` (알파 채널 포함)
+
+**검증 방법**:
+```bash
+ffprobe -show_entries stream=pix_fmt output.mov
+# 결과: pix_fmt=argb (알파 채널 포함)
 ```
 
 ### 6.3 path_utils.py - 경로 변환 유틸리티
@@ -1398,3 +1463,4 @@ target-version = "py311"
 |------|------|---------|--------|
 | 1.0 | 2026-01-15 | 초안 작성 (PostgreSQL + Celery) | Backend Team |
 | 2.0 | 2026-01-15 | Supabase 기반 재설계 | Claude Code |
+| 2.1 | 2026-01-16 | Alpha MOV 출력 기능 추가, 배경 레이어 비활성화 기능 | Claude Code |

@@ -75,8 +75,8 @@ def parse_args():
     parser.add_argument(
         "--nexrender-url",
         type=str,
-        default=os.getenv("NEXRENDER_URL", "http://localhost:3000"),
-        help="Nexrender 서버 URL (기본: NEXRENDER_URL 환경변수)",
+        default=os.getenv("NEXRENDER_URL", "http://localhost:3030"),
+        help="Nexrender 서버 URL (기본: NEXRENDER_URL 환경변수 또는 http://localhost:3030)",
     )
 
     parser.add_argument(
@@ -114,6 +114,15 @@ def parse_args():
         help="작업 제출 후 진행률 폴링 안함 (빠른 테스트용)",
     )
 
+    # 커스텀 필드 값 지정
+    parser.add_argument(
+        "--field",
+        "-f",
+        action="append",
+        metavar="NAME=VALUE",
+        help='필드 값 오버라이드 (예: --field event_name="MY EVENT" --field tournament_name="WSOP 2024")',
+    )
+
     return parser.parse_args()
 
 
@@ -137,7 +146,30 @@ async def test_render(args):
     # 1. 샘플 GFX 데이터 생성
     try:
         gfx_data = generate_sample_gfx_data(composition_name)
-        print(f"[Test Render] GFX 데이터 생성 완료")
+
+        # --field 옵션으로 필드 값 오버라이드
+        if args.field:
+            print("[Test Render] 커스텀 필드 적용 중...")
+            for field_spec in args.field:
+                if "=" in field_spec:
+                    name, value = field_spec.split("=", 1)
+                    name = name.strip()
+                    value = value.strip().strip('"').strip("'")
+
+                    # single_fields에 적용
+                    if name in gfx_data["single_fields"] or not gfx_data["slots"]:
+                        gfx_data["single_fields"][name] = value
+                        print(f'  - {name} = "{value}"')
+                    else:
+                        # 없는 필드도 추가 가능
+                        gfx_data["single_fields"][name] = value
+                        print(f'  - {name} = "{value}" (신규 추가)')
+                else:
+                    print(
+                        f"  - 경고: 잘못된 형식 '{field_spec}' (NAME=VALUE 형식 필요)"
+                    )
+
+        print("[Test Render] GFX 데이터 생성 완료")
         print(f"  - Slots: {len(gfx_data['slots'])}")
         print(f"  - Single Fields: {list(gfx_data['single_fields'].keys())}")
     except ValueError as e:
@@ -161,7 +193,7 @@ async def test_render(args):
         job_id=job_id,
     )
 
-    print(f"\n[Test Render] Nexrender Job JSON 생성 완료")
+    print("\n[Test Render] Nexrender Job JSON 생성 완료")
     print(f"  - Job ID: {job_id}")
     print(f"  - Template: {nexrender_job_data['template']['src']}")
     print(f"  - Composition: {nexrender_job_data['template']['composition']}")
@@ -193,10 +225,10 @@ async def test_render(args):
         print("  - Nexrender 서버가 실행 중인지 확인하세요.")
         print("  - URL이 올바른지 확인하세요.")
         sys.exit(1)
-    print(f"[Test Render] Nexrender 서버 정상")
+    print("[Test Render] Nexrender 서버 정상")
 
     # 6. 작업 제출
-    print(f"\n[Test Render] 작업 제출 중...")
+    print("\n[Test Render] 작업 제출 중...")
     try:
         response = await client.submit_job(nexrender_job_data)
         nexrender_job_uid = response.get("uid")
@@ -207,12 +239,14 @@ async def test_render(args):
 
     # 7. 진행률 폴링 (선택)
     if args.no_poll:
-        print(f"\n[Test Render] --no-poll 옵션: 폴링 건너뜀")
+        print("\n[Test Render] --no-poll 옵션: 폴링 건너뜀")
         print(f"  - 작업 UID: {nexrender_job_uid}")
-        print(f"  - 수동 조회: curl {args.nexrender_url}/api/v1/jobs/{nexrender_job_uid}")
+        print(
+            f"  - 수동 조회: curl {args.nexrender_url}/api/v1/jobs/{nexrender_job_uid}"
+        )
         return
 
-    print(f"\n[Test Render] 진행률 폴링 시작...")
+    print("\n[Test Render] 진행률 폴링 시작...")
 
     def progress_callback(progress: int, state: str):
         """진행률 콜백"""
@@ -225,11 +259,13 @@ async def test_render(args):
             timeout=1800,  # 30분
             poll_interval=5,
         )
-        print(f"\n[Test Render] 렌더링 완료!")
+        print("\n[Test Render] 렌더링 완료!")
         print(f"  - 최종 상태: {final_status.get('state')}")
-        print(f"  - 출력 파일: {job_config.output_dir}/{job_config.output_filename}.{job_config.output_format}")
+        print(
+            f"  - 출력 파일: {job_config.output_dir}/{job_config.output_filename}.{job_config.output_format}"
+        )
     except TimeoutError:
-        print(f"\nError: 렌더링 타임아웃 (30분 초과)")
+        print("\nError: 렌더링 타임아웃 (30분 초과)")
         sys.exit(1)
     except Exception as e:
         print(f"\nError: 렌더링 실패: {e}")

@@ -4,8 +4,6 @@
 Docker ↔ Windows 경로 변환, file:// URL 변환 테스트.
 """
 
-import pytest
-
 from lib.path_utils import PathConverter, PathMapping
 
 
@@ -17,7 +15,9 @@ class TestPathConverter:
         docker_path = "/app/templates/CyprusDesign/CyprusDesign.aep"
         result = path_converter.to_windows_path(docker_path)
 
-        assert result == "C:/claude/automation_ae/templates/CyprusDesign/CyprusDesign.aep"
+        assert (
+            result == "C:/claude/automation_ae/templates/CyprusDesign/CyprusDesign.aep"
+        )
 
     def test_to_windows_path_output(self, path_converter: PathConverter):
         """Docker 경로 → Windows 경로 (출력)"""
@@ -121,11 +121,17 @@ class TestCustomMappings:
 
         # Docker → Windows
         assert converter.to_windows_path("/mnt/data/file.txt") == "D:/Data/file.txt"
-        assert converter.to_windows_path("/mnt/projects/src/main.py") == "E:/Projects/src/main.py"
+        assert (
+            converter.to_windows_path("/mnt/projects/src/main.py")
+            == "E:/Projects/src/main.py"
+        )
 
         # Windows → Docker
         assert converter.to_docker_path("D:/Data/file.txt") == "/mnt/data/file.txt"
-        assert converter.to_docker_path("E:/Projects/src/main.py") == "/mnt/projects/src/main.py"
+        assert (
+            converter.to_docker_path("E:/Projects/src/main.py")
+            == "/mnt/projects/src/main.py"
+        )
 
     def test_empty_mappings(self):
         """빈 매핑 리스트 (DEFAULT_MAPPINGS 사용)"""

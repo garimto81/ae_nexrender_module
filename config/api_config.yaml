@@ -1,0 +1,168 @@
+# AE-Nexrender API 설정 파일
+#
+# 이 파일은 API 서버, 템플릿, DB 스키마 등의 설정을 관리합니다.
+# 환경변수 치환: ${VAR_NAME} 또는 $VAR_NAME 형식 사용 가능
+#
+# 핫 리로드:
+# - 이 파일 또는 매핑 파일 변경 시 자동 리로드
+# - 수동 트리거: POST /api/v1/config/reload
+
+version: "1.0.0"
+last_updated: "2026-01-16"
+
+# ============================================================================
+# 템플릿 설정 (AEP 파일 변경 시 이 파일만 수정)
+# ============================================================================
+templates:
+  # Cyprus Design 템플릿
+  CyprusDesign:
+    path: "/app/templates/CyprusDesign/CyprusDesign.aep"
+    mapping_file: "config/mappings/CyprusDesign.yaml"
+    compositions:
+      - "1-Hand-for-hand play is currently in progress"
+      - "1-NEXT STREAM STARTING SOON"
+      - "2-Hand-for-hand play is currently in progress"
+      - "2-NEXT STREAM STARTING SOON"
+      - "4-NEXT STREAM STARTING SOON"
+    default_composition: "1-Hand-for-hand play is currently in progress"
+    metadata:
+      designer: "Cyprus Design Team"
+      version: "1.5"
+      last_modified: "2026-01-15"
+      description: "WSOP Super Circuit Cyprus 그래픽 템플릿"
+
+  # 예시: 추가 템플릿
+  # PokerTemplate:
+  #   path: "/app/templates/Poker/PokerMain.aep"
+  #   mapping_file: "config/mappings/PokerTemplate.yaml"
+  #   compositions:
+  #     - "Main"
+  #     - "Leaderboard"
+  #     - "ChipCount"
+  #   default_composition: "Main"
+
+# ============================================================================
+# DB 스키마 추상화 (스키마 변경 시 이 설정만 수정)
+# ============================================================================
+db_schema:
+  table: "render_queue"
+
+  # 필드 매핑: API 필드명 -> DB 컬럼명
+  # 스키마 변경 시 여기서 매핑만 수정하면 코드 변경 없이 대응 가능
+  field_mappings:
+    # 기본 필드 (변경 없음)
+    id: "id"
+    aep_project: "aep_project"
+    aep_comp_name: "aep_comp_name"
+    gfx_data: "gfx_data"
+    output_format: "output_format"
+    output_path: "output_path"
+    status: "status"
+    priority: "priority"
+    render_type: "render_type"
+
+    # 시간 필드
+    queued_at: "queued_at"
+    started_at: "started_at"
+    completed_at: "completed_at"
+
+    # 진행률 필드
+    progress: "progress"
+    current_frame: "current_frame"
+    total_frames: "total_frames"
+
+    # 에러 필드
+    error_message: "error_message"
+    error_details: "error_details"
+
+    # 워커 필드
+    worker_id: "worker_id"
+
+    # 출력 필드
+    output_file_size: "output_file_size"
+    output_duration_seconds: "output_duration_seconds"
+    render_duration_ms: "render_duration_ms"
+
+    # 메타데이터
+    metadata: "metadata"
+
+    # 새 필드 추가 시 여기에 매핑 추가
+    # new_api_field: "new_db_column"
+
+  # 상태 매핑: API 상태 -> DB ENUM
+  status_mappings:
+    pending: "pending"
+    queued: "queued"
+    preparing: "preparing"
+    rendering: "rendering"
+    encoding: "encoding"
+    uploading: "uploading"
+    completed: "completed"
+    failed: "failed"
+    cancelled: "cancelled"
+
+# ============================================================================
+# API 서버 설정
+# ============================================================================
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
+
+  # 인증 설정
+  auth:
+    enabled: true
+    api_key_header: "X-API-Key"
+    # API 키는 환경변수에서 로드
+    # API_KEYS, API_KEY_PRODUCTION, API_KEY_STAGING 등
+
+  # CORS 설정
+  cors:
+    enabled: true
+    allowed_origins:
+      - "https://orchestrator.example.com"
+      - "http://localhost:3000"  # 개발용
+
+  # Rate Limiting
+  rate_limit:
+    enabled: false
+    requests_per_minute: 1000
+
+# ============================================================================
+# 핫 리로드 설정
+# ============================================================================
+hot_reload:
+  enabled: true
+  watch_paths:
+    - "config/mappings/*.yaml"
+    - "config/api_config.yaml"
+  debounce_seconds: 2
+  # on_reload_callback: "http://localhost:8080/webhook/config-reload"
+
+# ============================================================================
+# 로깅 설정
+# ============================================================================
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+
+# ============================================================================
+# 설정 업데이트 가이드
+# ============================================================================
+#
+# 1. AEP 레이어 이름 변경 시:
+#    - config/mappings/{template_name}.yaml 수정
+#    - 자동 핫 리로드 또는 POST /api/v1/config/reload
+#
+# 2. 새 컴포지션 추가 시:
+#    - 이 파일의 templates.{template}.compositions에 추가
+#    - 매핑 파일에 새 컴포지션 매핑 추가
+#
+# 3. DB 스키마 변경 시:
+#    - db_schema.field_mappings에 새 매핑 추가
+#    - 코드 변경 없이 자동 대응
+#
+# 4. 새 템플릿 추가 시:
+#    - templates 섹션에 새 템플릿 추가
+#    - config/mappings/{template_name}.yaml 생성
+#

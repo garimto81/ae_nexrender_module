@@ -117,7 +117,9 @@ class RenderJob(BaseModel):
 
     # 에러 처리
     error_message: str | None = None
-    error_details: dict[str, Any] | None = None  # 기존: error_category, retry_count 통합
+    error_details: dict[str, Any] | None = (
+        None  # 기존: error_category, retry_count 통합
+    )
     error_frame: int | None = None
 
     # 워커 정보

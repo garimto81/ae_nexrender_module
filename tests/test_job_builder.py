@@ -4,10 +4,9 @@ JobBuilder 단위 테스트
 GFX 데이터와 템플릿 기반 Job JSON 생성 테스트.
 """
 
-import pytest
 from typing import Any
 
-from lib.job_builder import NexrenderJobBuilder, JobConfig
+from lib.job_builder import JobConfig, NexrenderJobBuilder
 
 
 class TestJobConfig:
@@ -84,7 +83,9 @@ class TestBuildFromGFXData:
         assert copy_action["module"] == "@nexrender/action-copy"
         assert "C:/output/test-job-001.mp4" in copy_action["output"]
 
-    def test_build_multi_slot_gfx_data(self, sample_gfx_data_multi_slot: dict[str, Any]):
+    def test_build_multi_slot_gfx_data(
+        self, sample_gfx_data_multi_slot: dict[str, Any]
+    ):
         """여러 슬롯 GFX 데이터에서 Job JSON 생성"""
         config = JobConfig(
             aep_project_path="C:/templates/test.aep",
