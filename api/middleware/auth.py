@@ -75,9 +75,16 @@ class APIKeyAuth:
             if key := os.getenv(env_var):
                 keys.append(key)
 
-        # 개발 환경 기본 키 (프로덕션에서는 반드시 변경 필요)
-        if not keys and os.getenv("ENV", "dev") == "dev":
-            keys.append("dev-api-key-change-in-production")
+        # 개발 환경에서도 기본 키 사용 금지 - 보안 강화
+        # API 키가 없으면 경고 로그 출력
+        if not keys:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "⚠️ API 키가 설정되지 않았습니다. "
+                "환경변수 API_KEY 또는 API_KEYS를 설정하세요. "
+                "인증 없이 요청이 거부됩니다."
+            )
 
         return list(set(keys))  # 중복 제거
 
