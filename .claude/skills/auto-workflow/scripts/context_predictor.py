@@ -32,6 +32,10 @@ TASK_CONTEXT_ESTIMATES = {
     "research_web": 8,
     "research_plan": 12,
     "research_review": 10,
+    # Tier 3.5: 합의 토론 (Ultimate Debate)
+    "debate_small": 20,   # 2-3 라운드 (간단한 결정)
+    "debate_medium": 35,  # 4-5 라운드 (복잡한 결정)
+    "debate_large": 50,   # 5+ 라운드 (아키텍처 수준 결정)
     # Tier 4: 자율 개선
     "prd_analysis": 15,
     "solution_search": 12,

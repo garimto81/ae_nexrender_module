@@ -20,12 +20,35 @@ deprecated: false
 | `/auto stop` | `/work --loop stop` |
 | `/auto redirect "방향"` | `/work --loop redirect "방향"` |
 | `/auto --max N` | `/work --loop --max N` |
+| `/auto --debate "주제"` | 3AI 토론 즉시 실행 |
 
 ## 특수 기능
 
 | 명령 | 동작 |
 |------|------|
 | `/auto --mockup "이름"` | `/mockup` 스킬 직접 호출 |
+| `/auto --debate "주제"` | Ultimate Debate 3AI 토론 |
+
+### --mockup 기본 설정
+
+| 항목 | 기본값 | 설명 |
+|------|--------|------|
+| Style | `wireframe` | Black & White 와이어프레임 |
+| Text & Media | 플레이스홀더 | `[Logo]`, `[Image]`, `Lorem ipsum` 등 |
+
+> **참고**: 흑백 박스 레이아웃으로 빠르게 구조 중심 목업 생성
+
+### --debate 사용법
+
+```bash
+# 3AI 토론 즉시 실행
+/auto --debate "캐싱 전략 선택: Redis vs Memcached"
+
+# 복잡한 아키텍처 결정
+/auto --debate "마이크로서비스 vs 모놀리식 아키텍처"
+```
+
+> **참고**: `<!-- DECISION_REQUIRED -->` 마커 대신 `--debate` 플래그로 간단하게 토론 트리거
 
 ## 실행 지시
 
@@ -46,6 +69,9 @@ Skill(skill="work", args="--loop stop")
 
 # /auto --mockup "이름" → /mockup "이름"
 Skill(skill="mockup", args="$NAME")
+
+# /auto --debate "주제" → ultimate-debate 실행
+Skill(skill="ultimate-debate", args="\"$TOPIC\"")
 ```
 
 ## 상세 문서

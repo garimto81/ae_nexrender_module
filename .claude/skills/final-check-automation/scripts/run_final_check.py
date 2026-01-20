@@ -7,17 +7,29 @@ Usage:
 """
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 from datetime import datetime
 
 
+def _get_project_root() -> Path:
+    """프로젝트 루트 디렉토리를 동적으로 감지"""
+    if env_root := os.environ.get("CLAUDE_PROJECT_DIR"):
+        return Path(env_root)
+    script_dir = Path(__file__).resolve().parent
+    project_root = script_dir.parent.parent.parent.parent
+    if (project_root / ".claude").exists():
+        return project_root
+    return Path.cwd()
+
+
 class FinalCheck:
     """FINAL_CHECK 워크플로우 자동화"""
 
     def __init__(self, project_root: Path = None):
-        self.project_root = project_root or Path("D:/AI/claude01")
+        self.project_root = project_root or _get_project_root()
         self.logs_dir = self.project_root / "logs"
         self.logs_dir.mkdir(exist_ok=True)
         self.log_file = (

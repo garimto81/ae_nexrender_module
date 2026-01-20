@@ -13,12 +13,30 @@ Auto Discovery - 자율 발견 엔진 (v2.0)
 """
 
 import json
+import os
 import subprocess
 import re
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
 from typing import Optional
+
+
+def _get_project_root() -> Path:
+    """프로젝트 루트 디렉토리를 동적으로 감지"""
+    # 1. 환경 변수 우선
+    if env_root := os.environ.get("CLAUDE_PROJECT_DIR"):
+        return Path(env_root)
+    # 2. 스크립트 위치 기반 (skills/auto-workflow/scripts → 프로젝트 루트)
+    script_dir = Path(__file__).resolve().parent
+    project_root = script_dir.parent.parent.parent.parent
+    if (project_root / ".claude").exists():
+        return project_root
+    # 3. 현재 작업 디렉토리 (fallback)
+    return Path.cwd()
+
+
+DEFAULT_PROJECT_ROOT = _get_project_root()
 
 
 def run_command(cmd: list, cwd: Path, timeout: int = 30) -> subprocess.CompletedProcess:
@@ -60,6 +78,9 @@ class Priority(IntEnum):
     RESEARCH_PLAN = 33  # /research plan
     RESEARCH_REVIEW = 34  # /research review
 
+    # Tier 3.5: 합의 토론 (Ultimate Debate)
+    DEBATE_ANALYSIS = 35  # PRD 결정, 아키텍처 선택 시 3AI 토론
+
     # Tier 4: 자율 개선 (기존 Tier 2)
     CODE_QUALITY = 40  # 린트 경고 수정
     TEST_COVERAGE = 41  # 커버리지 개선
@@ -86,6 +107,7 @@ PARALLEL_CONFIG = {
     "research_code": 3,  # 영역별 분석
     "tdd": 2,  # Test/Impl
     "audit": 3,  # Git/Test/Docs
+    "debate": 3,  # Claude/GPT/Gemini 3AI 토론
 }
 
 # 작업별 예상 Context 사용량 (%)
@@ -104,6 +126,10 @@ CONTEXT_ESTIMATES = {
     "research_code": 10,
     "research_web": 8,
     "research_plan": 12,
+    # Debate (3AI 토론)
+    "debate_small": 20,   # 2-3 라운드
+    "debate_medium": 35,  # 4-5 라운드
+    "debate_large": 50,   # 5+ 라운드
     "default": 15,
 }
 
@@ -144,10 +170,18 @@ class AutoDiscovery:
     """자율 발견 엔진 (v2.0)"""
 
     def __init__(
-        self, project_root: str = "D:/AI/claude01", is_session_start: bool = False
+        self,
+        project_root: str = None,
+        is_session_start: bool = False,
+        debate_topic: str = None,  # --debate "주제" 플래그
     ):
-        self.project_root = Path(project_root)
+        # 동적 프로젝트 루트 감지 (None이면 자동 감지)
+        if project_root is None:
+            self.project_root = DEFAULT_PROJECT_ROOT
+        else:
+            self.project_root = Path(project_root)
         self.is_session_start = is_session_start
+        self.debate_topic = debate_topic  # 명시적 토론 주제
         self._lint_warning_threshold = 10  # 린트 경고 임계값
         self._commit_line_threshold = 100  # 커밋 필요 줄 수 임계값
 
@@ -158,6 +192,10 @@ class AutoDiscovery:
         Returns:
             DiscoveredTask or None (모든 검사 통과 시)
         """
+        # --debate 플래그가 있으면 즉시 토론 작업 반환
+        if self.debate_topic:
+            return self._create_debate_task(self.debate_topic)
+
         # Tier 0: 세션 관리
         task = self._check_tier0()
         if task:
@@ -175,6 +213,11 @@ class AutoDiscovery:
 
         # Tier 3: 개발 지원 (tdd, research)
         task = self._check_tier3()
+        if task:
+            return task
+
+        # Tier 3.5: 합의 토론 (ultimate-debate)
+        task = self._check_debate_needed()
         if task:
             return task
 
@@ -580,6 +623,228 @@ class AutoDiscovery:
 
         return None
 
+    # === Tier 3.5: 합의 토론 (Ultimate Debate) ===
+
+    def _create_debate_task(self, topic: str) -> DiscoveredTask:
+        """--debate 플래그로 직접 토론 작업 생성
+
+        Args:
+            topic: 토론 주제
+
+        Returns:
+            DiscoveredTask: 토론 작업
+        """
+        # 주제 길이에 따른 복잡도 추정
+        topic_len = len(topic)
+        if topic_len > 500:
+            task_type = "debate_large"
+            complexity = "high"
+        elif topic_len > 100:
+            task_type = "debate_medium"
+            complexity = "medium"
+        else:
+            task_type = "debate_small"
+            complexity = "low"
+
+        return DiscoveredTask(
+            priority=Priority.DEBATE_ANALYSIS,
+            category="합의 토론",
+            title=f"토론: {topic[:50]}..." if len(topic) > 50 else f"토론: {topic}",
+            description="--debate 플래그로 트리거된 3AI 토론",
+            command=f"ultimate-debate --task '{topic}' --mode direct",
+            parallel_agents=PARALLEL_CONFIG.get("debate", 3),
+            task_type=task_type,
+            complexity=complexity,
+            details={
+                "topic": topic,
+                "trigger": "DEBATE_FLAG",
+            },
+        )
+
+    def _check_debate_needed(self) -> Optional[DiscoveredTask]:
+        """합의 필요 결정 감지 → ultimate-debate 실행
+
+        트리거 조건:
+        1. PRD 파일에서 `<!-- DECISION_REQUIRED -->` 마커
+        2. 아키텍처 문서에서 `Option A/B/C` 패턴
+        3. GitHub 이슈에 `needs-consensus` 라벨
+        """
+        # 1. PRD 파일에서 DECISION_REQUIRED 마커 감지
+        task = self._check_prd_decision_required()
+        if task:
+            return task
+
+        # 2. 아키텍처 문서에서 Option 패턴 감지
+        task = self._check_architecture_options()
+        if task:
+            return task
+
+        # 3. GitHub 이슈에서 needs-consensus 라벨 감지
+        task = self._check_consensus_issues()
+        if task:
+            return task
+
+        return None
+
+    def _check_prd_decision_required(self) -> Optional[DiscoveredTask]:
+        """PRD 파일에서 DECISION_REQUIRED 마커 감지"""
+        prd_dirs = [
+            self.project_root / "tasks" / "prds",
+            self.project_root / "docs" / "prds",
+            self.project_root / "docs",
+        ]
+
+        for prd_dir in prd_dirs:
+            if not prd_dir.exists():
+                continue
+
+            for prd_file in prd_dir.glob("*.md"):
+                try:
+                    content = prd_file.read_text(encoding="utf-8")
+
+                    # DECISION_REQUIRED 마커 확인
+                    if "<!-- DECISION_REQUIRED -->" in content:
+                        # 결정 컨텍스트 추출
+                        decision_context = self._extract_decision_context(content)
+
+                        return DiscoveredTask(
+                            priority=Priority.DEBATE_ANALYSIS,
+                            category="합의 토론",
+                            title=f"결정 필요: {prd_file.stem}",
+                            description=decision_context or "PRD 결정 사항 토론",
+                            command=f"ultimate-debate --task '{prd_file.name}' --mode prd",
+                            parallel_agents=PARALLEL_CONFIG.get("debate", 3),
+                            task_type="debate_medium",
+                            complexity="high",
+                            details={
+                                "prd_file": str(prd_file),
+                                "trigger": "DECISION_REQUIRED",
+                                "context": decision_context,
+                            },
+                        )
+                except Exception:
+                    pass
+
+        return None
+
+    def _check_architecture_options(self) -> Optional[DiscoveredTask]:
+        """아키텍처 문서에서 Option A/B/C 패턴 감지"""
+        arch_dirs = [
+            self.project_root / "docs" / "architecture",
+            self.project_root / "docs",
+        ]
+
+        option_pattern = re.compile(
+            r"(Option\s+[A-C]|선택지\s*[1-3]|방안\s*[가-다])[\s:：]", re.IGNORECASE
+        )
+
+        for arch_dir in arch_dirs:
+            if not arch_dir.exists():
+                continue
+
+            for doc_file in arch_dir.glob("*.md"):
+                try:
+                    content = doc_file.read_text(encoding="utf-8")
+                    matches = option_pattern.findall(content)
+
+                    # 2개 이상의 선택지가 있으면 토론 필요
+                    if len(matches) >= 2:
+                        # 결정 안 된 상태인지 확인 (선택됨 표시 없음)
+                        if "선택됨" not in content and "selected" not in content.lower():
+                            return DiscoveredTask(
+                                priority=Priority.DEBATE_ANALYSIS,
+                                category="합의 토론",
+                                title=f"아키텍처 결정: {doc_file.stem}",
+                                description=f"{len(matches)}개 선택지 발견",
+                                command=f"ultimate-debate --task '{doc_file.name}' --mode architecture",
+                                parallel_agents=PARALLEL_CONFIG.get("debate", 3),
+                                task_type="debate_medium",
+                                complexity="high",
+                                details={
+                                    "doc_file": str(doc_file),
+                                    "options_count": len(matches),
+                                    "trigger": "ARCHITECTURE_OPTIONS",
+                                },
+                            )
+                except Exception:
+                    pass
+
+        return None
+
+    def _check_consensus_issues(self) -> Optional[DiscoveredTask]:
+        """GitHub 이슈에서 needs-consensus 라벨 감지"""
+        try:
+            result = run_command(
+                [
+                    "gh",
+                    "issue",
+                    "list",
+                    "--state",
+                    "open",
+                    "--label",
+                    "needs-consensus",
+                    "--limit",
+                    "5",
+                    "--json",
+                    "number,title,body,labels",
+                ],
+                cwd=self.project_root,
+                timeout=30,
+            )
+
+            if result.returncode == 0 and result.stdout and result.stdout.strip():
+                issues = json.loads(result.stdout)
+                if issues:
+                    target = issues[0]
+
+                    # 이슈 복잡도 추정
+                    body_len = len(target.get("body", ""))
+                    if body_len > 1000:
+                        task_type = "debate_large"
+                    elif body_len > 300:
+                        task_type = "debate_medium"
+                    else:
+                        task_type = "debate_small"
+
+                    return DiscoveredTask(
+                        priority=Priority.DEBATE_ANALYSIS,
+                        category="합의 토론",
+                        title=f"이슈 #{target['number']}: {target['title']}",
+                        description=f"needs-consensus 라벨 ({len(issues)}개 이슈)",
+                        command=f"ultimate-debate --task 'GitHub Issue #{target['number']}' --mode issue",
+                        parallel_agents=PARALLEL_CONFIG.get("debate", 3),
+                        task_type=task_type,
+                        complexity="high",
+                        details={
+                            "issue": target,
+                            "trigger": "NEEDS_CONSENSUS_LABEL",
+                        },
+                    )
+        except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
+            pass
+
+        return None
+
+    def _extract_decision_context(self, content: str) -> Optional[str]:
+        """PRD에서 결정 컨텍스트 추출"""
+        # DECISION_REQUIRED 마커 주변 텍스트 추출
+        marker = "<!-- DECISION_REQUIRED -->"
+        idx = content.find(marker)
+        if idx == -1:
+            return None
+
+        # 마커 다음 200자 추출
+        start = idx + len(marker)
+        end = min(start + 200, len(content))
+        context = content[start:end].strip()
+
+        # 다음 마커까지만
+        next_marker = context.find("<!--")
+        if next_marker != -1:
+            context = context[:next_marker].strip()
+
+        return context if context else None
+
     # === Tier 4: 자율 개선 (코드 품질, 커버리지 등) ===
 
     def _check_tier4(self) -> Optional[DiscoveredTask]:
@@ -944,6 +1209,9 @@ class AutoDiscovery:
             "tier3_dev": {
                 "tdd_needed": self._check_tdd_needed() is not None,
                 "research_needed": self._check_research_needed() is not None,
+            },
+            "tier3_5_debate": {
+                "debate_needed": self._check_debate_needed() is not None,
             },
             "tier4_improve": {
                 "lint_issues": self._check_lint_issues() is not None,

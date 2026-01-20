@@ -9,15 +9,27 @@ Usage:
 
 import argparse
 import json
+import os
 import subprocess
 from pathlib import Path
+
+
+def _get_project_root() -> Path:
+    """프로젝트 루트 디렉토리를 동적으로 감지"""
+    if env_root := os.environ.get("CLAUDE_PROJECT_DIR"):
+        return Path(env_root)
+    script_dir = Path(__file__).resolve().parent
+    project_root = script_dir.parent.parent.parent.parent
+    if (project_root / ".claude").exists():
+        return project_root
+    return Path.cwd()
 
 
 class FailedIssueHandler:
     """실패 이슈 처리"""
 
     def __init__(self, project_root: Path = None):
-        self.project_root = project_root or Path("D:/AI/claude01")
+        self.project_root = project_root or _get_project_root()
 
     def run_gh(self, *args) -> tuple[int, str]:
         """GitHub CLI 실행"""

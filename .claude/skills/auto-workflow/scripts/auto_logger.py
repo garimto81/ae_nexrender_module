@@ -8,13 +8,30 @@ Auto Logger - /auto 워크플로우 로그 관리
 """
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
 # 상수
 CHUNK_SIZE_BYTES = 50 * 1024  # 50KB
-LOG_DIR = Path("D:/AI/claude01/.claude/auto-logs")
+
+# 동적 프로젝트 루트 감지 (환경 변수 > 현재 디렉토리)
+def _get_project_root() -> Path:
+    """프로젝트 루트 디렉토리를 동적으로 감지"""
+    # 1. 환경 변수 우선
+    if env_root := os.environ.get("CLAUDE_PROJECT_DIR"):
+        return Path(env_root)
+    # 2. 스크립트 위치 기반 (skills/auto-workflow/scripts → 프로젝트 루트)
+    script_dir = Path(__file__).resolve().parent
+    project_root = script_dir.parent.parent.parent.parent
+    if (project_root / ".claude").exists():
+        return project_root
+    # 3. 현재 작업 디렉토리 (fallback)
+    return Path.cwd()
+
+PROJECT_ROOT = _get_project_root()
+LOG_DIR = PROJECT_ROOT / ".claude" / "auto-logs"
 ACTIVE_DIR = LOG_DIR / "active"
 ARCHIVE_DIR = LOG_DIR / "archive"
 

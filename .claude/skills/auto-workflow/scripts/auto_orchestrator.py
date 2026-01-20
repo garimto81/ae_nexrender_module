@@ -92,14 +92,15 @@ class AutoOrchestrator:
     def __init__(
         self,
         config: LoopConfig,
-        project_root: str = "D:/AI/claude01",
+        project_root: str = None,
         session_id: Optional[str] = None,
         is_session_start: bool = True,
     ):
         self.config = config
-        self.project_root = Path(project_root)
         self.is_session_start = is_session_start
         self.discovery = AutoDiscovery(project_root, is_session_start=is_session_start)
+        # 동적 프로젝트 루트 감지 (discovery에서 감지한 경로 사용)
+        self.project_root = self.discovery.project_root
 
         # 상태 관리
         self.state = AutoState(
@@ -432,7 +433,11 @@ class AutoOrchestrator:
         )
 
     def _execute_task(self, task: DiscoveredTask) -> tuple[str, bool]:
-        """Claude Code로 작업 실행"""
+        """작업 실행 - debate 작업은 별도 처리"""
+        # Tier 3.5: Ultimate Debate 작업 감지
+        if task.task_type.startswith("debate_") or "ultimate-debate" in task.command:
+            return self._run_debate(task)
+
         self._log(f"\n🚀 Claude Code 실행: {task.command}")
 
         try:
@@ -665,6 +670,149 @@ class AutoOrchestrator:
         except Exception as e:
             self._log(f"   ❌ TDD 테스트 오류: {e}")
             return ValidationResult(passed=False, test_type="tdd", error_message=str(e))
+
+    def _run_debate(self, task: DiscoveredTask) -> tuple[str, bool]:
+        """Ultimate Debate 엔진으로 3AI 토론 실행
+
+        Args:
+            task: 토론 작업 정보
+
+        Returns:
+            (출력, 성공 여부)
+        """
+        self._log(f"\n🎯 Ultimate Debate 시작: {task.title}")
+        self._log("   Claude/GPT/Gemini 3AI 토론")
+
+        try:
+            import asyncio
+            import sys
+
+            # ultimate-debate 모듈 경로 추가
+            debate_path = self.project_root / "src"
+            if str(debate_path) not in sys.path:
+                sys.path.insert(0, str(debate_path))
+
+            from ultimate_debate.engine import UltimateDebate
+            from ultimate_debate.clients import ClaudeClient, OpenAIClient, GeminiClient
+
+            # 태스크 설명 추출
+            task_description = task.details.get("context") or task.description
+
+            # 토론 엔진 초기화
+            debate = UltimateDebate(
+                task=task_description,
+                max_rounds=5,
+                consensus_threshold=0.8,
+            )
+
+            # 3AI 클라이언트 등록
+            self._log("   [1/4] AI 클라이언트 초기화...")
+            clients_registered = 0
+
+            try:
+                claude_client = ClaudeClient()
+                if asyncio.get_event_loop().run_until_complete(
+                    claude_client.ensure_authenticated()
+                ):
+                    debate.register_ai_client("claude", claude_client)
+                    clients_registered += 1
+                    self._log("      ✅ Claude 등록")
+            except Exception as e:
+                self._log(f"      ⚠️  Claude 등록 실패: {e}")
+
+            try:
+                openai_client = OpenAIClient()
+                if asyncio.get_event_loop().run_until_complete(
+                    openai_client.ensure_authenticated()
+                ):
+                    debate.register_ai_client("gpt", openai_client)
+                    clients_registered += 1
+                    self._log("      ✅ GPT 등록")
+            except Exception as e:
+                self._log(f"      ⚠️  GPT 등록 실패: {e}")
+
+            try:
+                gemini_client = GeminiClient()
+                if asyncio.get_event_loop().run_until_complete(
+                    gemini_client.ensure_authenticated()
+                ):
+                    debate.register_ai_client("gemini", gemini_client)
+                    clients_registered += 1
+                    self._log("      ✅ Gemini 등록")
+            except Exception as e:
+                self._log(f"      ⚠️  Gemini 등록 실패: {e}")
+
+            if clients_registered < 2:
+                self._log("   ❌ 최소 2개 AI 필요 - 토론 취소")
+                return "Insufficient AI clients for debate", False
+
+            self._log(f"   [2/4] 토론 실행 ({clients_registered}개 AI)...")
+
+            # 토론 실행
+            result = asyncio.get_event_loop().run_until_complete(debate.run())
+
+            # 결과 처리
+            self._log("   [3/4] 결과 분석...")
+            consensus_pct = result.get("consensus_percentage", 0) * 100
+            status = result.get("status", "UNKNOWN")
+            total_rounds = result.get("total_rounds", 0)
+
+            self._log(f"      상태: {status}")
+            self._log(f"      합의율: {consensus_pct:.1f}%")
+            self._log(f"      라운드: {total_rounds}")
+
+            # FINAL.md 위치
+            final_md = self.project_root / ".claude" / "debates" / result.get("task_id", "") / "FINAL.md"
+
+            # 로그 기록
+            self.state.logger.log(
+                event_type="debate_completed",
+                phase="tier3_5",
+                data={
+                    "task_id": result.get("task_id"),
+                    "status": status,
+                    "consensus_percentage": consensus_pct,
+                    "total_rounds": total_rounds,
+                    "final_md": str(final_md) if final_md.exists() else None,
+                },
+            )
+
+            self._log("   [4/4] 토론 완료")
+
+            success = status == "FULL_CONSENSUS" or consensus_pct >= 50
+            if success:
+                self.success_count += 1
+                self.failure_count = 0
+                self._log(f"   ✅ 토론 성공 (합의율: {consensus_pct:.1f}%)")
+            else:
+                self.failure_count += 1
+                self._log(f"   ⚠️  토론 완료 - 합의 미달 (합의율: {consensus_pct:.1f}%)")
+
+            # 결과 요약
+            output = f"""
+=== Ultimate Debate 결과 ===
+상태: {status}
+합의율: {consensus_pct:.1f}%
+라운드: {total_rounds}
+Task ID: {result.get('task_id')}
+FINAL.md: {final_md if final_md.exists() else '생성되지 않음'}
+
+합의 항목:
+{json.dumps(result.get('agreed_items', []), ensure_ascii=False, indent=2)}
+
+미합의 항목:
+{json.dumps(result.get('disputed_items', []), ensure_ascii=False, indent=2)}
+"""
+            return output, success
+
+        except ImportError as e:
+            self._log(f"   ❌ ultimate-debate 모듈 로드 실패: {e}")
+            return f"ImportError: {e}", False
+
+        except Exception as e:
+            self._log(f"   ❌ 토론 실행 오류: {e}")
+            self.failure_count += 1
+            return str(e), False
 
     def _trigger_debug(self, e2e_result: ValidationResult) -> bool:
         """E2E 실패 시 디버그 자동 트리거"""

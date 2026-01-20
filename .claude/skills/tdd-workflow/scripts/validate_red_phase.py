@@ -7,9 +7,21 @@ Usage:
 """
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
+
+
+def _get_project_root() -> Path:
+    """프로젝트 루트 디렉토리를 동적으로 감지"""
+    if env_root := os.environ.get("CLAUDE_PROJECT_DIR"):
+        return Path(env_root)
+    script_dir = Path(__file__).resolve().parent
+    project_root = script_dir.parent.parent.parent.parent
+    if (project_root / ".claude").exists():
+        return project_root
+    return Path.cwd()
 
 
 def find_implementation_file(test_file: Path) -> Path | None:
@@ -22,7 +34,7 @@ def find_implementation_file(test_file: Path) -> Path | None:
         impl_name = test_name
 
     # 가능한 구현 파일 경로들
-    project_root = Path("D:/AI/claude01")
+    project_root = _get_project_root()
     possible_paths = [
         project_root / "src" / f"{impl_name}.py",
         project_root / "src" / impl_name / "__init__.py",
