@@ -243,7 +243,7 @@ class SupabaseQueueClient:
         """
         # 기존 error_details 조회
         job = await self.get_job(job_id)
-        error_details = {}
+        error_details: dict[str, Any] = {}
         if job:
             error_details = job.get("error_details", {}) or {}
 
@@ -287,7 +287,7 @@ class SupabaseQueueClient:
         """
         # 기존 error_details 조회
         job = await self.get_job(job_id)
-        error_details = {}
+        error_details: dict[str, Any] = {}
         if job:
             error_details = job.get("error_details", {}) or {}
 

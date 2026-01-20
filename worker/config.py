@@ -87,7 +87,10 @@ class WorkerConfig:
             path_mappings=(
                 path_mappings
                 if path_mappings
-                else cls.__dataclass_fields__["path_mappings"].default_factory()
+                else [
+                    PathMapping("/app/templates", "C:/claude/automation_ae/templates"),
+                    PathMapping("/app/output", "C:/claude/automation_ae/output"),
+                ]
             ),
         )
 
