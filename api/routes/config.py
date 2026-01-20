@@ -137,4 +137,4 @@ async def reload_config(
                 "error": "RELOAD_FAILED",
                 "message": str(e),
             },
-        )
+        ) from e

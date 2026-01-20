@@ -17,6 +17,8 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",
     "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "types-PyYAML>=6.0.0",
 ]
 
 [project.scripts]
@@ -29,10 +31,15 @@ build-backend = "setuptools.build_meta"
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-select = ["E", "F", "I", "N", "W", "B", "Q"]
-ignore = ["E501"]
 
-[tool.ruff.isort]
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "B", "Q"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"worker/main.py" = ["E402"]  # dotenv 로딩 후 동적 import
+
+[tool.ruff.lint.isort]
 known-first-party = ["lib", "worker"]
 
 [tool.pytest.ini_options]

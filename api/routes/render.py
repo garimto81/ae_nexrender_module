@@ -90,7 +90,7 @@ async def submit_render(
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={"error": "DB_ERROR", "message": str(e)},
-            )
+            ) from e
 
     # 대기열 위치 계산 (옵션)
     position = None
@@ -229,7 +229,7 @@ async def list_renders(
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={"error": "DB_ERROR", "message": str(e)},
-            )
+            ) from e
 
     return RenderListResponse(
         items=items,
@@ -313,7 +313,7 @@ async def get_render(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": "DB_ERROR", "message": str(e)},
-        )
+        ) from e
 
 
 @router.get(
@@ -369,7 +369,7 @@ async def get_render_status(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": "DB_ERROR", "message": str(e)},
-        )
+        ) from e
 
 
 @router.delete(
@@ -428,4 +428,4 @@ async def cancel_render(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": "DB_ERROR", "message": str(e)},
-        )
+        ) from e

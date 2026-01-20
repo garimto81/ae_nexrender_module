@@ -87,10 +87,10 @@ class NexrenderClient:
                 return response.json()
         except httpx.HTTPStatusError as e:
             logger.error(f"Nexrender submit job failed: {e.response.text}")
-            raise NexrenderError(f"작업 제출 실패: {e.response.status_code}")
+            raise NexrenderError(f"작업 제출 실패: {e.response.status_code}") from e
         except httpx.HTTPError as e:
             logger.error(f"Nexrender submit job error: {e}")
-            raise NexrenderError(f"Nexrender 서버 연결 실패: {e}")
+            raise NexrenderError(f"Nexrender 서버 연결 실패: {e}") from e
 
     async def get_job(self, job_uid: str) -> dict[str, Any]:
         """작업 상태 조회
@@ -111,12 +111,12 @@ class NexrenderClient:
                 return response.json()
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
-                raise NexrenderError("작업을 찾을 수 없습니다")
+                raise NexrenderError("작업을 찾을 수 없습니다") from e
             logger.error(f"Nexrender get job failed: {e.response.text}")
-            raise NexrenderError(f"작업 조회 실패: {e.response.status_code}")
+            raise NexrenderError(f"작업 조회 실패: {e.response.status_code}") from e
         except httpx.HTTPError as e:
             logger.error(f"Nexrender get job error: {e}")
-            raise NexrenderError(f"Nexrender 서버 연결 실패: {e}")
+            raise NexrenderError(f"Nexrender 서버 연결 실패: {e}") from e
 
     async def list_jobs(self) -> list[dict[str, Any]]:
         """모든 작업 목록 조회
@@ -134,7 +134,7 @@ class NexrenderClient:
                 return response.json()
         except httpx.HTTPError as e:
             logger.error(f"Nexrender list jobs error: {e}")
-            raise NexrenderError(f"작업 목록 조회 실패: {e}")
+            raise NexrenderError(f"작업 목록 조회 실패: {e}") from e
 
     async def cancel_job(self, job_uid: str) -> bool:
         """작업 취소
@@ -242,10 +242,10 @@ class NexrenderSyncClient:
                 return response.json()
         except httpx.HTTPStatusError as e:
             logger.error(f"Nexrender submit job failed: {e.response.text}")
-            raise NexrenderError(f"작업 제출 실패: {e.response.status_code}")
+            raise NexrenderError(f"작업 제출 실패: {e.response.status_code}") from e
         except httpx.HTTPError as e:
             logger.error(f"Nexrender submit job error: {e}")
-            raise NexrenderError(f"Nexrender 서버 연결 실패: {e}")
+            raise NexrenderError(f"Nexrender 서버 연결 실패: {e}") from e
 
     def get_job(self, job_uid: str) -> dict[str, Any]:
         """작업 상태 조회 (동기)
@@ -266,9 +266,9 @@ class NexrenderSyncClient:
                 return response.json()
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
-                raise NexrenderError("작업을 찾을 수 없습니다")
+                raise NexrenderError("작업을 찾을 수 없습니다") from e
             logger.error(f"Nexrender get job failed: {e.response.text}")
-            raise NexrenderError(f"작업 조회 실패: {e.response.status_code}")
+            raise NexrenderError(f"작업 조회 실패: {e.response.status_code}") from e
         except httpx.HTTPError as e:
             logger.error(f"Nexrender get job error: {e}")
-            raise NexrenderError(f"Nexrender 서버 연결 실패: {e}")
+            raise NexrenderError(f"Nexrender 서버 연결 실패: {e}") from e
