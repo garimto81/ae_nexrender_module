@@ -24,6 +24,7 @@ templates:
       - "2-Hand-for-hand play is currently in progress"
       - "2-NEXT STREAM STARTING SOON"
       - "4-NEXT STREAM STARTING SOON"
+      - "_Feature Table Leaderboard"
     default_composition: "1-Hand-for-hand play is currently in progress"
     metadata:
       designer: "Cyprus Design Team"

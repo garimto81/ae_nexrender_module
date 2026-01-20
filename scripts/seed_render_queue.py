@@ -69,12 +69,13 @@ def parse_args():
     )
 
     # 출력 설정
+    # [필수] 기본값: mov_alpha (투명 배경)
     parser.add_argument(
         "--output-format",
         type=str,
-        default="mp4",
-        choices=["mp4", "mov", "mov_alpha", "png_sequence"],
-        help="출력 포맷 (기본: mp4)",
+        default="mov_alpha",
+        choices=["mov_alpha", "mov", "mp4", "png_sequence"],
+        help="출력 포맷 (기본: mov_alpha - 투명 배경 필수)",
     )
 
     parser.add_argument(

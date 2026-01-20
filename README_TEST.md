@@ -55,9 +55,10 @@ print(gfx_data)
 # }
 
 # 2. render_queue INSERT용 데이터 생성
+# [필수] 기본값: mov_alpha (투명 배경)
 render_request = generate_sample_render_request(
     composition_name="2-NEXT STREAM STARTING SOON",
-    output_format="mp4",
+    output_format="mov_alpha",  # 기본값 - 투명 배경 필수
     priority=5,
 )
 
@@ -98,16 +99,18 @@ python scripts/test_render.py --sample \
 | `--composition` | 특정 컴포지션 선택 |
 | `--dry-run` | Job JSON만 생성 (렌더링 안함) |
 | `--no-poll` | 진행률 폴링 건너뜀 |
-| `--output-format` | 출력 포맷 (mp4, mov, mov_alpha, png_sequence) |
+| `--output-format` | 출력 포맷 (기본: **mov_alpha**, mov, mp4, png_sequence) |
 | `--field` | 필드 값 오버라이드 (예: `--field event_name="MY EVENT"`) |
 
 ### 출력 포맷 상세
 
+> **[CRITICAL] 기본 출력 포맷은 `mov_alpha`입니다. 다른 포맷은 명시적 요청 시에만 사용하세요.**
+
 | 포맷 | 확장자 | 설명 | Output Module |
 |------|--------|------|---------------|
-| `mp4` | .mp4 | H.264 압축 (기본값) | AE 기본 설정 |
+| **`mov_alpha`** | .mov | **[기본값]** 알파 채널 포함 (투명 배경) | Alpha MOV |
 | `mov` | .mov | QuickTime 무손실 | AE 기본 설정 |
-| `mov_alpha` | .mov | **알파 채널 포함** (투명 배경) | Apple ProRes 4444 |
+| `mp4` | .mp4 | H.264 압축 | AE 기본 설정 |
 | `png_sequence` | .png | PNG 시퀀스 | AE 기본 설정 |
 
 ### 알파 채널 출력 (mov_alpha)

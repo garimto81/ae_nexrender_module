@@ -130,7 +130,7 @@ class RenderDetailResponse(RenderStatusResponse):
     gfx_data: dict[str, Any] = Field(
         default_factory=dict, description="GFX 렌더링 데이터"
     )
-    output_format: str = Field(default="mp4", description="출력 포맷")
+    output_format: str = Field(default="mov_alpha", description="출력 포맷 (기본: mov_alpha 투명 배경)")
     priority: int = Field(default=100, description="우선순위")
     render_type: str = Field(default="custom", description="렌더 타입")
 
