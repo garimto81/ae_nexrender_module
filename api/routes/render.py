@@ -4,11 +4,15 @@
 렌더링 작업 제출, 상태 조회, 취소 등의 핵심 API를 제공합니다.
 """
 
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from lib.mapping_loader import MappingLoader, extract_template_name
+from lib.mapping_validator import MappingValidator
 
 from ..dependencies import get_config_store, get_supabase_client, verify_api_key
 from ..schemas.request import RenderBatchRequest, RenderRequest
@@ -21,6 +25,28 @@ from ..schemas.response import (
     RenderStatus,
     RenderStatusResponse,
 )
+
+logger = logging.getLogger(__name__)
+
+# 모듈 레벨 싱글톤
+_mapping_loader: MappingLoader | None = None
+_validator: MappingValidator | None = None
+
+
+def _get_mapping_loader() -> MappingLoader:
+    """MappingLoader 싱글톤"""
+    global _mapping_loader
+    if _mapping_loader is None:
+        _mapping_loader = MappingLoader()
+    return _mapping_loader
+
+
+def _get_validator() -> MappingValidator:
+    """MappingValidator 싱글톤"""
+    global _validator
+    if _validator is None:
+        _validator = MappingValidator(_get_mapping_loader())
+    return _validator
 
 router = APIRouter(
     prefix="/api/v1/render",
@@ -44,6 +70,9 @@ router = APIRouter(
 )
 async def submit_render(
     request: RenderRequest,
+    validate_mapping: bool = Query(
+        True, description="매핑 검증 수행 여부 (기본: True)"
+    ),
     supabase_client: Any = Depends(get_supabase_client),
     config_store: Any = Depends(get_config_store),
 ) -> RenderResponse:
@@ -51,6 +80,7 @@ async def submit_render(
 
     Args:
         request: 렌더링 요청 데이터
+        validate_mapping: 매핑 검증 수행 여부 (기본: True)
 
     Returns:
         RenderResponse: 생성된 작업 정보
@@ -58,11 +88,67 @@ async def submit_render(
     # 작업 ID 생성
     job_id = str(uuid.uuid4())
     queued_at = datetime.now(timezone.utc)
+    warnings: list[str] = []
 
-    # 컴포지션 유효성 검사 (옵션)
-    if config_store:
-        # TODO: 컴포지션 존재 여부 확인
-        pass
+    # 컴포지션 유효성 검사
+    if validate_mapping:
+        try:
+            validator = _get_validator()
+            template_name = extract_template_name(request.aep_project)
+
+            # 1. 컴포지션 존재 확인 → 치명적 오류, 차단
+            if not validator.composition_exists(template_name, request.aep_comp_name):
+                # 사용 가능한 컴포지션 목록 조회
+                mapping_loader = _get_mapping_loader()
+                available = mapping_loader.get_compositions(template_name)
+
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "error": "INVALID_COMPOSITION",
+                        "message": f"Composition '{request.aep_comp_name}' not found in template '{template_name}'",
+                        "template": template_name,
+                        "composition": request.aep_comp_name,
+                        "available_compositions": available,
+                    },
+                )
+
+            # 2. GFX 데이터 매핑 검증 (경고만, 차단 없음)
+            result = validator.validate(
+                template_name=template_name,
+                composition_name=request.aep_comp_name,
+                gfx_data=request.gfx_data,
+            )
+
+            # 경고 수집
+            warnings.extend(result.warnings)
+
+            if result.fallback_fields:
+                warnings.append(
+                    f"Fallback fields (no mapping): {result.fallback_fields}"
+                )
+
+            if result.errors:
+                # 에러는 경고로 기록 (현재 정책: 차단 없음)
+                logger.warning(
+                    f"[Render] Validation errors (not blocking): {result.errors}"
+                )
+                warnings.extend(result.errors)
+
+            if warnings:
+                logger.info(f"[Render] Job {job_id} warnings: {warnings}")
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            # 검증 실패해도 렌더링은 진행 (경고만)
+            logger.warning(f"[Render] Mapping validation failed: {e}")
+            warnings.append(f"Mapping validation skipped: {e}")
+
+    # metadata에 검증 경고 포함
+    job_metadata = {**request.metadata}
+    if warnings:
+        job_metadata["validation_warnings"] = warnings
 
     # DB에 작업 추가
     if supabase_client:
@@ -81,7 +167,7 @@ async def submit_render(
                 ),
                 "status": "pending",
                 "render_type": request.render_type,
-                "metadata": request.metadata,
+                "metadata": job_metadata,
                 "queued_at": queued_at.isoformat(),
             }
 
@@ -117,6 +203,9 @@ async def submit_render(
 )
 async def submit_batch_render(
     request: RenderBatchRequest,
+    validate_mapping: bool = Query(
+        True, description="매핑 검증 수행 여부 (기본: True)"
+    ),
     supabase_client: Any = Depends(get_supabase_client),
     config_store: Any = Depends(get_config_store),
 ) -> RenderBatchResponse:
@@ -124,6 +213,7 @@ async def submit_batch_render(
 
     Args:
         request: 배치 렌더링 요청
+        validate_mapping: 매핑 검증 수행 여부 (기본: True)
 
     Returns:
         RenderBatchResponse: 배치 처리 결과
@@ -137,6 +227,7 @@ async def submit_batch_render(
             # 개별 작업 제출
             response = await submit_render(
                 request=job_request,
+                validate_mapping=validate_mapping,
                 supabase_client=supabase_client,
                 config_store=config_store,
             )

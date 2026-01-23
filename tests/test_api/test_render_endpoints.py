@@ -119,7 +119,7 @@ class TestRenderEndpoints:
     async def test_submit_render_with_options(self, app_client, mock_supabase_client):
         """렌더링 작업 제출 (옵션 포함)"""
         response = await app_client.post(
-            "/api/v1/render",
+            "/api/v1/render?validate_mapping=false",  # 테스트용 컴포지션이므로 검증 비활성화
             json={
                 "aep_project": "/app/templates/Test.aep",
                 "aep_comp_name": "Main",
@@ -249,7 +249,7 @@ class TestBatchRenderEndpoints:
     async def test_submit_batch_render(self, app_client, mock_supabase_client):
         """배치 렌더링 제출"""
         response = await app_client.post(
-            "/api/v1/render/batch",
+            "/api/v1/render/batch?validate_mapping=false",  # 테스트용 컴포지션이므로 검증 비활성화
             json={
                 "jobs": [
                     {

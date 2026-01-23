@@ -161,3 +161,70 @@ class RenderBatchRequest(BaseModel):
         default_factory=dict,
         description="배치 레벨 메타데이터",
     )
+
+
+# =============================================================================
+# 매핑 검증 요청 스키마 (Phase 1: DB 매핑값과 컴포지션 선택 API 호출 관계)
+# =============================================================================
+
+
+class MappingValidationRequest(BaseModel):
+    """매핑 검증 요청 스키마
+
+    POST /api/v1/mapping/validate 요청에 사용됩니다.
+
+    Example:
+        ```python
+        request = MappingValidationRequest(
+            template_name="CyprusDesign",
+            composition_name="_Feature Table Leaderboard",
+            gfx_data={
+                "slots": [
+                    {"slot_index": 1, "fields": {"name": "PHIL IVEY", "chips": "250,000"}}
+                ],
+                "single_fields": {"event_name": "WSOP"}
+            }
+        )
+        ```
+    """
+
+    template_name: str = Field(
+        ...,
+        description="AEP 템플릿 이름",
+        examples=["CyprusDesign"],
+    )
+    composition_name: str = Field(
+        ...,
+        description="컴포지션 이름",
+        examples=["_Feature Table Leaderboard"],
+    )
+    gfx_data: dict[str, Any] = Field(
+        ...,
+        description="검증할 GFX 데이터 (slots, single_fields 포함)",
+        examples=[
+            {
+                "slots": [
+                    {"slot_index": 1, "fields": {"name": "PHIL IVEY", "chips": "250,000"}}
+                ],
+                "single_fields": {"event_name": "WSOP Cyprus"},
+            }
+        ],
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "template_name": "CyprusDesign",
+                "composition_name": "_Feature Table Leaderboard",
+                "gfx_data": {
+                    "slots": [
+                        {
+                            "slot_index": 1,
+                            "fields": {"name": "PHIL IVEY", "chips": "250,000"},
+                        }
+                    ],
+                    "single_fields": {"event_name": "WSOP SUPER CIRCUIT CYPRUS"},
+                },
+            }
+        }
+    }

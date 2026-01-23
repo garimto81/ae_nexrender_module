@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .dependencies import get_settings, set_config_store, set_supabase_client
-from .routes import config_router, health_router, render_router
+from .routes import config_router, health_router, mapping_router, render_router
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +125,7 @@ After Effects 렌더링 작업을 HTTP API로 제출하고 관리합니다.
     app.include_router(health_router)  # /health
     app.include_router(render_router)  # /api/v1/render
     app.include_router(config_router)  # /api/v1/config
+    app.include_router(mapping_router)  # /api/v1/mapping
 
     # 글로벌 예외 핸들러
     @app.exception_handler(Exception)

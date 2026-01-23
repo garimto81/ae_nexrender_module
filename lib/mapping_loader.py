@@ -172,6 +172,66 @@ class MappingLoader:
             del self._cache[template_name]
         return self.load(template_name)
 
+    def list_all_templates(self) -> list[str]:
+        """모든 템플릿 이름 목록 조회
+
+        Returns:
+            템플릿 이름 리스트 (매핑 파일 기준)
+        """
+        templates: list[str] = []
+
+        if self.mappings_dir.exists():
+            # YAML 파일
+            for mapping_file in self.mappings_dir.glob("*.yaml"):
+                templates.append(mapping_file.stem)
+
+            # JSON 파일 (YAML 없는 경우)
+            for mapping_file in self.mappings_dir.glob("*.json"):
+                if mapping_file.stem not in templates:
+                    templates.append(mapping_file.stem)
+
+        return sorted(templates)
+
+    def list_all_compositions(self) -> dict[str, list[str]]:
+        """모든 템플릿의 컴포지션 목록 조회
+
+        Returns:
+            {template_name: [composition_names]} 딕셔너리
+        """
+        result: dict[str, list[str]] = {}
+
+        for template_name in self.list_all_templates():
+            result[template_name] = self.get_compositions(template_name)
+
+        return result
+
+    def get_composition_metadata(
+        self,
+        template_name: str,
+        composition_name: str,
+    ) -> dict[str, Any] | None:
+        """컴포지션 메타데이터 조회
+
+        Args:
+            template_name: AEP 템플릿 이름
+            composition_name: 컴포지션 이름
+
+        Returns:
+            메타데이터 딕셔너리 또는 None
+        """
+        mapping = self.load(template_name)
+        compositions = mapping.get("compositions", {})
+        comp_data = compositions.get(composition_name)
+
+        if not comp_data:
+            return None
+
+        return {
+            "description": comp_data.get("description"),
+            "field_count": len(comp_data.get("field_mappings", {})),
+            "layer_info": comp_data.get("layer_info"),
+        }
+
 
 def extract_template_name(aep_path: str) -> str:
     """AEP 파일 경로에서 템플릿 이름 추출

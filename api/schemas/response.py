@@ -282,3 +282,160 @@ class CompositionsResponse(ConfigResponse):
 
     template: str = Field(..., description="템플릿 이름")
     compositions: list[str] = Field(..., description="사용 가능한 컴포지션 목록")
+
+
+# =============================================================================
+# 매핑 관련 스키마 (Phase 1: DB 매핑값과 컴포지션 선택 API 호출 관계)
+# =============================================================================
+
+
+class MappingStatus(str, Enum):
+    """매핑 상태"""
+
+    VALID = "valid"  # 매핑 파일에 정의됨
+    MISSING = "missing"  # 매핑 없음 (필드 누락)
+    FALLBACK = "fallback"  # 매핑 없어서 원본 필드명 사용
+
+
+class FieldMappingInfo(BaseModel):
+    """개별 필드 매핑 정보"""
+
+    gfx_field: str = Field(..., description="GFX JSON 필드명")
+    layer_name: str = Field(..., description="AEP 레이어명")
+    status: MappingStatus = Field(..., description="매핑 상태")
+    is_fallback: bool = Field(default=False, description="fallback 사용 여부")
+
+
+class CompositionMappingResponse(BaseModel):
+    """컴포지션 매핑 상세 응답
+
+    GET /api/v1/mapping/{template}/{composition} 응답으로 반환됩니다.
+    """
+
+    template: str = Field(..., description="템플릿 이름")
+    composition: str = Field(..., description="컴포지션 이름")
+    description: str | None = Field(default=None, description="컴포지션 설명")
+    field_mappings: dict[str, str] = Field(
+        default_factory=dict,
+        description="필드 매핑 (gfx_field -> layer_name)",
+    )
+    slot_count: int = Field(default=0, description="슬롯 수")
+    single_field_count: int = Field(default=0, description="단일 필드 수")
+    version: str = Field(default="1.0", description="매핑 파일 버전")
+    last_updated: datetime | None = Field(
+        default=None, description="마지막 업데이트 시각"
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "template": "CyprusDesign",
+                "composition": "_Feature Table Leaderboard",
+                "description": "피처 테이블 리더보드 (9명 순위 표시)",
+                "field_mappings": {
+                    "slot1_name": "Name 1",
+                    "slot1_chips": "Chips 1",
+                    "event_name": "WSOP SUPER CIRCUIT CYPRUS",
+                },
+                "slot_count": 9,
+                "single_field_count": 2,
+                "version": "1.0",
+            }
+        }
+    }
+
+
+class MappingValidationResult(BaseModel):
+    """매핑 검증 결과 응답
+
+    POST /api/v1/mapping/validate 응답으로 반환됩니다.
+    """
+
+    is_valid: bool = Field(..., description="검증 통과 여부")
+    matched_fields: list[str] = Field(
+        default_factory=list, description="매핑된 필드 목록"
+    )
+    missing_fields: list[str] = Field(
+        default_factory=list, description="누락된 필드 목록"
+    )
+    fallback_fields: list[str] = Field(
+        default_factory=list, description="fallback 사용 필드 목록"
+    )
+    warnings: list[str] = Field(default_factory=list, description="경고 메시지 목록")
+    errors: list[str] = Field(default_factory=list, description="에러 메시지 목록")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "is_valid": True,
+                "matched_fields": ["event_name", "tournament_name"],
+                "missing_fields": [],
+                "fallback_fields": ["custom_field"],
+                "warnings": ["Field 'custom_field' not in mapping, using fallback"],
+                "errors": [],
+            }
+        }
+    }
+
+
+class MappingSummaryItem(BaseModel):
+    """매핑 요약 항목"""
+
+    template: str = Field(..., description="템플릿 이름")
+    composition_count: int = Field(..., description="컴포지션 수")
+    compositions: list[str] = Field(..., description="컴포지션 목록")
+
+
+class MappingSummaryResponse(BaseModel):
+    """전체 매핑 상태 요약 응답
+
+    GET /api/v1/mapping 응답으로 반환됩니다.
+    """
+
+    total_templates: int = Field(..., description="총 템플릿 수")
+    total_compositions: int = Field(..., description="총 컴포지션 수")
+    templates: list[MappingSummaryItem] = Field(..., description="템플릿별 요약")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "total_templates": 1,
+                "total_compositions": 6,
+                "templates": [
+                    {
+                        "template": "CyprusDesign",
+                        "composition_count": 6,
+                        "compositions": [
+                            "1-Hand-for-hand play is currently in progress",
+                            "_Feature Table Leaderboard",
+                        ],
+                    }
+                ],
+            }
+        }
+    }
+
+
+class CompositionDetailInfo(BaseModel):
+    """컴포지션 상세 정보"""
+
+    name: str = Field(..., description="컴포지션 이름")
+    description: str | None = Field(default=None, description="설명")
+    slot_count: int = Field(default=0, description="슬롯 수")
+    field_count: int = Field(default=0, description="필드 수")
+    has_mapping: bool = Field(default=False, description="매핑 파일 존재 여부")
+
+
+class CompositionDetailResponse(ConfigResponse):
+    """컴포지션 상세 목록 응답
+
+    GET /api/v1/config/templates/{name}/compositions (확장) 응답으로 반환됩니다.
+    """
+
+    template: str = Field(..., description="템플릿 이름")
+    compositions: list[CompositionDetailInfo] = Field(
+        ..., description="컴포지션 상세 목록"
+    )
+    default_composition: str | None = Field(
+        default=None, description="기본 컴포지션 이름"
+    )
